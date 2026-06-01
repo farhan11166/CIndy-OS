@@ -2,7 +2,7 @@
 #define SCREEN_H
 
 void clear_screen();
-void print(const char* str, int row);
-void printAt(const char* str, int row, int col);
+void print(const char* str);
+void print_at(const char* str, int row, int col);
 
 #endif
