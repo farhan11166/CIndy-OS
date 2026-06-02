@@ -1,4 +1,5 @@
 #include "../include/screen.h"
+#include "../include/ports.h"
 
 void kernel_main() {
 
@@ -14,6 +15,12 @@ void kernel_main() {
 
     print("Hex test: ");
     print_hex(3735928559);
+    print("\n");
+    print("Testing ports");
+    outb(0x3F8,1);
+    unsigned char port_val = inb(0x60);
+    print_int(port_val);
+    
 
     print("\n");
 }
