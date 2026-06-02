@@ -17,6 +17,7 @@ void kernel_main() {
     print_hex(3735928559);
     print("\n");
     print("Testing ports");
+    print("\n");
     outb(0x3F8,1);
     unsigned char port_val = inb(0x60);
     print_int(port_val);
