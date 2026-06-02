@@ -59,8 +59,8 @@ void print_int(int num){
         num=-num;
     }
     while (num>0){
-        buffer[i++]=(num%10)+"0";
-        num=/10;
+        buffer[i++] = (num%10)+'0';
+        num/=10;
     }
     for(int j=i-1;j>=0;j--){
         char str[2]; 

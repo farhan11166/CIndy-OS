@@ -13,7 +13,7 @@ void kernel_main() {
     print("\n");
 
     print("Hex test: ");
-    print_hex(0xB8000);
+    print_hex(3735928559);
 
     print("\n");
 }
