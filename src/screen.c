@@ -47,3 +47,39 @@ void print(const char* msg) {
         }
     }
 }
+void print_int(int num){
+    char buffer [16];
+    int i=0;
+    if(num==0){
+        print("0");
+        return;
+    }
+    if(num<0){
+        print("-");
+        num=-num;
+    }
+    while (num>0){
+        buffer[i++]=(num%10)+"0";
+        num=/10;
+    }
+    for(int j=i-1;j>=0;j--){
+        char str[2]; 
+        str[0] = buffer[j]; str[1] = '\0'; 
+        print(str);
+    }
+}
+
+void print_hex(unsigned int num){
+    char* hex_chars = "0123456789ABCDEF";
+    print("0X");
+     for (int i = 28; i >= 0; i -= 4) {
+
+        unsigned int digit = (num >> i) & 0xF;
+
+        char str[2];
+        str[0] = hex_chars[digit];
+        str[1] = '\0';
+
+        print(str);
+    }
+}
