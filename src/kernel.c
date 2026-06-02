@@ -7,7 +7,7 @@ void kernel_main() {
     print("Welcome to CIndy-OS\n");
     print("Boot successful\n");
     print("Kernel loaded successfully\n");
-     print("Integer test: ");
+    print("Integer test: ");
     print_int(12345);
 
     print("\n");
