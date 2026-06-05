@@ -1,5 +1,10 @@
 #include "../include/screen.h"
 #include "../include/ports.h"
+#include "../include/idt.h"
+#include "../include/pic.h"
+void keyboard_handler() {
+    print("KEYBOARD INTERRUPT\n");
+}
 
 void kernel_main() {
 
@@ -18,10 +23,17 @@ void kernel_main() {
     print("\n");
     print("Testing ports");
     print("\n");
-    outb(0x3F8,1);
-    unsigned char port_val = inb(0x60);
-    print_int(port_val);
+    print("Initializing IDT...\n");
+
+    idt_init();
+
+    print("IDT loaded successfully\n");
     
 
     print("\n");
+    print("Remapping PIC...\n");
+
+    pic_remap();
+
+    print("PIC remapped successfully\n");
 }

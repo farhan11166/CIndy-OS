@@ -13,7 +13,14 @@ struct idt_ptr{
     unsigned short limit;
     unsigned int base;
 }__attribute__((packed));
+void idt_set_gate(
+    unsigned char num,
+    unsigned int base,
+    unsigned short selector,
+    unsigned char flags
+);
 
 void idt_init();
+extern void idt_load(struct idt_ptr* idtp);
 
 #endif

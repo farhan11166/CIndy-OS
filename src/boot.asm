@@ -5,6 +5,8 @@ MAGIC     equ 0x1BADB002
 FLAGS     equ 0
 CHECKSUM  equ -(MAGIC + FLAGS)
 
+section .note.GNU-stack,"",@progbits
+
 section .multiboot
 align 4
     dd MAGIC
