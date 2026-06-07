@@ -55,6 +55,12 @@ GRUB loads kernel.bin into RAM at 0x100000 (1 MiB)
 GRUB jumps to your `start` label in boot.asm
    │
    ▼
+boot.asm loads CIndy-OS's own GDT and segment registers
+   │
+   ▼
+boot.asm sets the stack pointer
+   │
+   ▼
 boot.asm calls kernel_main() in C
    │
    ▼
@@ -72,6 +78,7 @@ Your C kernel runs 🎉
 | 1 | **NASM** | `nasm -f elf32 src/boot.asm -o boot.o` | ELF32 object file |
 | 1 | **NASM** | `nasm -f elf32 src/idt_load.asm -o idt_load.o` | ELF32 object file |
 | 1 | **NASM** | `nasm -f elf32 src/isr.asm -o isr.o` | ELF32 object file |
+| 1 | **NASM** | `nasm -f elf32 src/interrupts.asm -o interrupts.o` | ELF32 object file |
 | 2 | **GCC** | `gcc -m32 -ffreestanding -c src/kernel.c -o kernel.o` | ELF32 object file |
 | 2 | **GCC** | `gcc -m32 -ffreestanding -c src/screen.c -o screen.o` | ELF32 object file |
 | 2 | **GCC** | `gcc -m32 -ffreestanding -c src/ports.c -o ports.o` | ELF32 object file |
@@ -80,6 +87,7 @@ Your C kernel runs 🎉
 | 3 | **LD** | `ld -m elf_i386 -T linker.ld -o kernel.bin ...` | Final kernel binary |
 | 4 | **grub-mkrescue** | `grub-mkrescue -o CIndy-os.iso iso` | Bootable ISO image |
 | 5 | **QEMU** | `qemu-system-i386 -cdrom CIndy-os.iso` | Running virtual machine |
+| 5 | **QEMU debug** | `make run-debug` | Headless boot log through debug port `0xE9` |
 
 ### Key GCC Flags
 - `-m32` — compile for 32-bit x86, not 64-bit. Our kernel runs in 32-bit protected mode.
@@ -262,12 +270,15 @@ extern kernel_main
 MAGIC     equ 0x1BADB002
 FLAGS     equ 0
 CHECKSUM  equ -(MAGIC + FLAGS)
+CODE_SEG  equ gdt_code - gdt_start
+DATA_SEG  equ gdt_data - gdt_start
 ```
 > `equ` defines **compile-time constants** — like `#define` in C but for NASM. No memory is allocated.
 >
 > - `MAGIC = 0x1BADB002` — the Multiboot magic number. GRUB literally searches byte-by-byte for this value.
 > - `FLAGS = 0` — configuration flags for GRUB. `0` means "no special requests" (no memory map, no framebuffer, etc.)
 > - `CHECKSUM = -(MAGIC + FLAGS)` — the spec requires that `MAGIC + FLAGS + CHECKSUM == 0` (mod 2³²). This is a basic integrity check so GRUB knows it found a real header, not random data that happens to look like the magic number.
+> - `CODE_SEG` and `DATA_SEG` are selector offsets into the kernel's own GDT. With the current layout, code is `0x08` and data is `0x10`.
 
 ---
 
@@ -295,19 +306,37 @@ bits 32
 
 ```asm
 start:
+    cli
+    lgdt [gdt_descriptor]
+    jmp CODE_SEG:flush_segments
+
+flush_segments:
+    mov ax, DATA_SEG
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+
+    mov esp, stack_top
     call kernel_main
 ```
 > `start` is our entry point — the very first instruction GRUB jumps to.
+> The kernel installs its own flat GDT before calling C, so it does not depend on GRUB's temporary segment setup.
+> The far jump reloads `cs`, then the data segment registers and stack segment are loaded with the kernel data selector.
+> `mov esp, stack_top` points the CPU at the 16 KiB stack declared in `boot.asm`.
 > `call kernel_main` pushes the return address onto the stack and jumps to `kernel_main()` in C.
-> The calling convention (cdecl) is handled automatically: GRUB set up a valid stack for us.
 
 ---
 
 ```asm
 hang:
+    cli
+    hlt
     jmp hang
 ```
 > If `kernel_main` ever returns (it shouldn't), we fall into an **infinite loop** here.
+> `hlt` stops the CPU until another interrupt instead of spinning hot forever.
 > Without this, the CPU would execute whatever garbage bytes follow in memory — undefined behaviour.
 > This is the OS equivalent of `while(true) {}`.
 
@@ -327,7 +356,11 @@ hang:
 | Set instruction width | `bits 32` | Emit 32-bit opcodes (vs 16-bit) |
 | Align to boundary | `align N` | Pad to next N-byte boundary |
 | Unconditional jump | `jmp label` | Jump to label (no condition) |
+| Far jump | `jmp selector:label` | Reload `cs` with a new code segment selector |
 | Call function | `call label` | Push return address + jump |
+| Load GDT | `lgdt [ptr]` | Load the Global Descriptor Table register |
+| Load IDT | `lidt [ptr]` | Load the Interrupt Descriptor Table register |
+| Halt CPU | `hlt` | Sleep until the next interrupt |
 
 ---
 
@@ -356,6 +389,8 @@ The spec says: **the header must appear in the first 8192 bytes (8 KiB) of the O
 4. Puts a pointer to a Multiboot info struct in `ebx` (we don't use this yet — needed for Week 7 memory map)
 5. Puts `0x2BADB002` in `eax` as a "handshake" value
 6. Jumps to the entry point (`start`)
+
+CIndy-OS currently installs its own flat GDT immediately after entry. GRUB gets us into protected mode, but the kernel still takes ownership of segment setup before running C code.
 
 ---
 
@@ -441,10 +476,21 @@ void outb(unsigned short port, unsigned char data) {
 |------|--------|---------|
 | `0x60` | PS/2 Keyboard | Read scancode / send command |
 | `0x64` | PS/2 Controller | Status register / command port |
+| `0xE9` | QEMU debug console | Print debug bytes with `-debugcon stdio` |
 | `0x20` / `0x21` | PIC (Primary) | 8259 interrupt controller |
 | `0xA0` / `0xA1` | PIC (Secondary) | Cascaded PIC |
 | `0x40`–`0x43` | PIT | Programmable Interval Timer |
 | `0x3F8` | COM1 (Serial) | First serial port |
+
+### QEMU Debug Port `0xE9`
+
+CIndy-OS mirrors `print()` output to port `0xE9`. This port is a QEMU debugging helper, not normal PC hardware, but it is very useful when VGA output or curses display is blank.
+
+```sh
+make run-debug
+```
+
+That target runs QEMU with `-debugcon stdio -global isa-debugcon.iobase=0xe9`, so every byte written to port `0xE9` appears in the terminal.
 
 ---
 
@@ -491,8 +537,15 @@ Bits 0-3: Gate type (0xE = 32-bit interrupt gate)
 
 1. Sets `idtp.limit = sizeof(idt_entry) * 256 - 1`
 2. Sets `idtp.base = (uint32_t)&idt` — address of the array
-3. Calls `idt_set_gate(33, isr33, 0x08, 0x8E)` — wires keyboard IRQ (IRQ1 → vector 33 after PIC remap)
-4. Calls `idt_load(&idtp)` — executes `lidt` to install the IDT into the CPU
+3. Calls `idt_load(&idtp)` — executes `lidt` to install the IDT into the CPU
+
+The keyboard gate is currently registered in `kernel_main()` before interrupts are enabled:
+
+```c
+idt_set_gate(33, (unsigned int)isr33, 0x08, 0x8E);
+```
+
+This works because `lidt` stores the base address of the `idt` array. If code updates an entry in that same array before `sti`, the CPU sees the updated gate when the interrupt fires.
 
 ### Vector Number Layout
 
@@ -543,9 +596,9 @@ outb(0xA1, 0x02);   // secondary: cascade identity = 2
 outb(0x21, 0x01);   // 8086/88 mode
 outb(0xA1, 0x01);
 
-// OCW1 — unmask all IRQs (0 = unmasked)
-outb(0x21, 0x00);
-outb(0xA1, 0x00);
+// OCW1 — mask everything except IRQ1 keyboard
+outb(0x21, 0xFD);
+outb(0xA1, 0xFF);
 ```
 
 ### PIC Port Map
@@ -567,7 +620,13 @@ outb(0x20, 0x20);   // EOI to primary PIC (for IRQ 0–7)
 outb(0xA0, 0x20);
 ```
 
-> ⚠️ **`keyboard_handler` must send EOI** — this is missing from the current `isr.asm` and must be added in Week 3 or keyboards will only fire once.
+The current `keyboard_handler()` sends EOI after reading port `0x60`, so keyboard interrupts keep firing:
+
+```c
+last_scancode = inb(0x60);
+key_pressed = 1;
+outb(0x20, 0x20);
+```
 
 ---
 
@@ -592,7 +651,6 @@ isr33:
     call keyboard_handler   ; jump to C function
 
     popa            ; restore all 8 general-purpose registers
-    sti             ; re-enable interrupts
     iret            ; return from interrupt (restores eip, cs, eflags)
 ```
 
@@ -615,6 +673,8 @@ BIOS → GRUB → (finds 0x1BADB002 in kernel.bin) →
   switches to 32-bit protected mode →
   loads kernel.bin at 0x100000 →
   jumps to start: in boot.asm →
+  load kernel GDT + segment registers →
+  set esp to stack_top →
   call kernel_main in kernel.c
 
 BUILD PIPELINE
@@ -622,6 +682,7 @@ BUILD PIPELINE
 boot.asm      ──[nasm -f elf32]──► boot.o      ─┐
 idt_load.asm  ──[nasm -f elf32]──► idt_load.o  ─┤
 isr.asm       ──[nasm -f elf32]──► isr.o       ─┤
+interrupts.asm──[nasm -f elf32]──► interrupts.o ─┤
 kernel.c      ──[gcc -m32 -c]───► kernel.o     ─┤──[ld -T linker.ld]──► kernel.bin
 screen.c      ──[gcc -m32 -c]───► screen.o     ─┤
 ports.c       ──[gcc -m32 -c]───► ports.o      ─┤        └──[grub-mkrescue]──► CIndy-os.iso
@@ -649,6 +710,7 @@ PIC PORTS
 0x20 = primary PIC command   0x21 = primary PIC data
 0xA0 = secondary PIC command 0xA1 = secondary PIC data
 EOI  = outb(0x20, 0x20)  (+ outb(0xA0,0x20) for IRQ 8–15)
+Current mask: primary 0xFD (IRQ1 only), secondary 0xFF (all masked)
 
 NASM QUICK REFERENCE
 ─────────────────────────────────────────────────────
@@ -662,6 +724,8 @@ bits 32       → emit 32-bit opcodes
 section .name → switch to section
 pusha / popa  → save / restore all 8 GPRs
 iret          → interrupt return (restores eip, cs, eflags)
+sti           → enable maskable interrupts
+hlt           → halt until next interrupt
 
 VGA TEXT BUFFER
 ─────────────────────────────────────────────────────

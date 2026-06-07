@@ -1,2 +1,11 @@
+# Build outputs
 *.o
 *.bin
+*.iso
+
+# Generated boot image copied into the ISO tree
+iso/boot/kernel.bin
+
+# Local emulator/debug leftovers
+*.log
+qemu.log

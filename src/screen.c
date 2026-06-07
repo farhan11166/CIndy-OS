@@ -5,6 +5,10 @@ volatile char* video_memory =(volatile char*) 0xb8000;
 int cursor_row=0;
 int cursor_col=0;
 
+static void debug_putc(char c) {
+    __asm__ volatile("outb %0, $0xE9" : : "a"(c));
+}
+
 void clear_screen(){
     for(int i=0;i<80*25;i++){
         video_memory[i*2]=' ';
@@ -29,6 +33,7 @@ void print(const char* msg) {
     for (int i = 0; msg[i] != '\0'; i++) {
 
         if (msg[i] == '\n') {
+            debug_putc('\n');
             cursor_row++;
             cursor_col = 0;
             offset = (cursor_row * 80 + cursor_col) * 2;
@@ -37,6 +42,7 @@ void print(const char* msg) {
 
         video_memory[offset] = msg[i];
         video_memory[offset + 1] = 0x6F;
+        debug_putc(msg[i]);
 
         offset += 2;
         cursor_col++;

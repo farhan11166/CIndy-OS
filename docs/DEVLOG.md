@@ -2,6 +2,8 @@
 
 > A bare-metal x86 operating system built from scratch in C and NASM Assembly.
 > This log tracks weekly progress, bugs squashed, and things learned along the way.
+>
+> Current plan: this is a focused learner project where I write the code myself, understand each subsystem, and keep the scope small enough to finish a working base in about two weeks.
 
 ---
 
@@ -60,7 +62,7 @@ Welcome to CIndy-os
   - `MAGIC = 0x1BADB002`
   - `FLAGS = 0`
   - `CHECKSUM = -(MAGIC + FLAGS)`
-- Also noted that `linker.ld` expects entry point `_start` but `boot.asm` declared `start` (no underscore) — to be reconciled when doing the full boot refactor.
+- Confirmed `linker.ld` and `boot.asm` now agree on the entry point name: `start`.
 
 ### 🐛 Bugs Fixed
 | Bug | Root Cause | Fix |
@@ -96,8 +98,8 @@ Welcome to CIndy-os
 
 ---
 
-## Week 2 — Debug Utilities + IDT + PIC
-**Date:** June 6, 2026
+## Week 2 — Debug Utilities + IDT + PIC + First Keyboard IRQ
+**Date:** June 6-8, 2026
 **Phase:** ✅ Done
 
 ### ✅ What I Built
@@ -108,40 +110,54 @@ Welcome to CIndy-os
 - Added **line-wrap** — when `cursor_col >= 80`, automatically advances to the next row
 - Added `print_int(int num)` — converts a signed integer to decimal string and prints it via `print()`
 - Added `print_hex(unsigned int num)` — prints a 32-bit value as `0xXXXXXXXX` uppercase hex
+- Mirrored `print()` output to QEMU debug port `0xE9` so boot progress can be seen with `make run-debug` even if VGA/curses display is blank
 
 **IDT (`src/idt.c` + `include/idt.h`)**
 - Defined `struct idt_entry` (8 bytes, `__attribute__((packed))`) with fields: `base_low`, `selector`, `always_zero`, `flags`, `base_high`
 - Defined `struct idt_ptr` (6 bytes, `__attribute__((packed))`) — the descriptor passed to `lidt`
 - Implemented `idt_set_gate(num, base, selector, flags)` — fills one IDT entry
-- Implemented `idt_init()` — sets limit/base of the IDT pointer, registers IRQ1 (keyboard) at gate 33 with selector `0x08` and flags `0x8E`, calls `idt_load()`
-- Declared `extern void idt_load(struct idt_ptr*)` — implemented in `idt_load.asm` (stub, to be completed)
+- Implemented `idt_init()` — sets limit/base of the IDT pointer and calls `idt_load()`
+- Implemented `idt_load.asm` — uses `lidt [idtp]` to install the IDT into the CPU
+- Registered IRQ1 (keyboard) at vector 33 with selector `0x08` and flags `0x8E` before enabling interrupts
 
 **ISR (`src/isr.asm`)**
 - Wrote `isr33` — the keyboard interrupt stub:
   - `cli` / `pusha` — disable interrupts, save all registers
-  - `call keyboard_handler` — jump to C handler (to be implemented in Week 3)
-  - `popa` / `sti` / `iret` — restore registers, re-enable interrupts, return from interrupt
+  - `call keyboard_handler` — jump to the C handler
+  - `popa` / `iret` — restore registers and return from interrupt
+- Temporarily added a red `K` debug marker in the top-right corner to prove the ISR was firing, then removed it once keyboard interrupts were confirmed
 
 **PIC (`src/pic.c` + `include/pic.h`)**
 - Implemented `pic_remap()` — remaps the 8259A PIC so hardware IRQs 0–15 no longer clash with CPU exceptions 0–31:
   - Primary PIC: IRQ 0–7 → vectors `0x20–0x27`
   - Secondary PIC: IRQ 8–15 → vectors `0x28–0x2F`
   - Sent init command `0x11`, offsets, cascade wiring, and `0x01` (8086 mode)
-  - Unmasked all IRQs on both PICs (`outb(0x21, 0x00)`, `outb(0xA1, 0x00)`)
+  - Masked every IRQ except IRQ1 so only keyboard interrupts are enabled for now
 
 **Kernel (`kernel.c`)**
 - Added includes for `idt.h`, `pic.h`, `ports.h`
 - Now calls `print_int(12345)` and `print_hex(0xDEADBEEF)` as debug smoke tests
-- Calls `idt_init()` then `pic_remap()` in sequence on boot
+- Calls `idt_init()`, `pic_remap()`, registers `isr33`, then enables interrupts with `sti`
+- Added `keyboard_handler()` in C:
+  - reads the raw scancode from port `0x60`
+  - stores it in `last_scancode`
+  - marks `key_pressed = 1`
+  - sends EOI with `outb(0x20, 0x20)`
+- Main loop now uses `hlt` and prints raw keyboard scancodes when a key is pressed or released
 
 **Makefile**
 - Added compile steps for `src/idt.c → idt.o`, `src/pic.c → pic.o`
-- Added NASM assembly steps for `src/idt_load.asm → idt_load.o`, `src/isr.asm → isr.o`
+- Added NASM assembly steps for `src/idt_load.asm → idt_load.o`, `src/isr.asm → isr.o`, `src/interrupts.asm → interrupts.o`
 - All new object files added to the `ld` link command
+- Added `run-curses` for terminal-only QEMU display
+- Added `run-debug` for headless boot logging through QEMU debug port `0xE9`
 
 ### 🐛 Bugs / Notes
-- `src/idt_load.asm` is currently **empty** — `idt_load` is declared but the `lidt` instruction has not been written yet. This will cause a linker error (`undefined reference to idt_load`) until filled in.
-- `keyboard_handler` is called from `isr.asm` but not yet defined in any C file — will be added in Week 3.
+- `make run` failed with `gtk initialization failed` in a no-GUI environment. The kernel was not broken; QEMU just could not open a GTK window. Use `make run-debug` or `make run-curses` depending on the environment.
+- Linker warnings about executable stack came from NASM objects missing `.note.GNU-stack`. Added the note section to assembly files.
+- Boot looked blank in curses/headless mode even though the kernel was running. Mirroring `print()` to QEMU debug port `0xE9` proved the boot path was working.
+- Added a small flat GDT in `boot.asm` before calling C so the kernel does not rely on whatever segment setup GRUB happens to leave behind.
+- Removed the temporary red `K` ISR debug marker after confirming keyboard interrupts worked.
 
 ### 📚 What I Learned
 - The **IDT** has 256 entries, each 8 bytes. CPU exceptions use gates 0–31, hardware IRQs 32–47 (after PIC remap), and the rest are available for software interrupts.
@@ -150,30 +166,118 @@ Welcome to CIndy-os
 - The PIC init sequence is: ICW1 (start init) → ICW2 (vector offset) → ICW3 (cascade) → ICW4 (mode)
 - **ISR stubs** must save/restore all registers (`pusha`/`popa`) and end with `iret`, not `ret` — `iret` restores `cs`, `eip`, and `eflags` that the CPU pushed automatically.
 - `idt_load` must call `lidt [idtp]` — the CPU register that holds the IDT descriptor is invisible to C, so it requires one line of assembly.
+- `sti` enables maskable hardware interrupts globally, but the PIC mask still decides which IRQ lines are allowed through.
+- Keyboard press and release are different scancodes. For example, Enter press is `0x1C`, and Enter release is `0x9C`.
+- A kernel can be booting correctly even when the display path is blank; debug output through a known I/O port is useful for proving progress.
+- GRUB enters protected mode, but the kernel should still set up its own GDT/segments before trusting C code and the stack.
 
 **New Files Added:**
 | File | Purpose |
 |---|---|
 | `src/idt.c` | IDT entries array, `idt_set_gate`, `idt_init` |
 | `include/idt.h` | `idt_entry`, `idt_ptr` structs, function declarations |
-| `src/idt_load.asm` | (stub) Will call `lidt` to load the IDT |
+| `src/idt_load.asm` | Calls `lidt` to load the IDT |
 | `src/isr.asm` | ISR33 stub — keyboard interrupt handler bridge |
 | `src/pic.c` | `pic_remap()` — 8259 PIC initialization |
 | `include/pic.h` | `pic_remap()` declaration |
+| `src/interrupts.asm` | `enable_interrupts()` wrapper around `sti` |
+| `include/interrupts.h` | `enable_interrupts()` declaration |
 
 ---
 
-## Week 3 — *(Upcoming)*
-**Phase:** Keyboard Input & `idt_load` Completion
+## 🔧 Patch — June 8, 2026
+**Phase:** Boot Reliability, Debugging, and IRQ1 Proof
 
-Complete the interrupt plumbing started in Week 2 and get the first real keyboard input working.
+### ✅ What Changed Today
+- Confirmed the kernel was building cleanly with `make`.
+- Fixed NASM linker warnings by adding `.note.GNU-stack` metadata to assembly objects.
+- Added `run-curses` as a terminal-only QEMU option for environments without GTK.
+- Added `run-debug` using QEMU debug port `0xE9`, which made boot progress visible even when VGA/curses looked blank.
+- Mirrored `print()` output to debug port `0xE9` from `screen.c`.
+- Updated GRUB config to prefer console/text payload mode:
+  - `set timeout=0`
+  - `set default=0`
+  - `terminal_output console`
+  - `set gfxpayload=text`
+- Added a small flat GDT in `boot.asm` before entering C:
+  - kernel code selector: `0x08`
+  - kernel data selector: `0x10`
+  - reloads `cs` with a far jump
+  - reloads `ds`, `es`, `fs`, `gs`, and `ss`
+  - sets `esp` to `stack_top`
+- Added `enable_interrupts()` in `src/interrupts.asm` as a small wrapper around `sti`.
+- Verified IRQ1 keyboard interrupts work:
+  - `isr33` runs
+  - `keyboard_handler()` reads port `0x60`
+  - the handler sends PIC EOI with `outb(0x20, 0x20)`
+  - raw scancodes print on screen
+- Removed the temporary red `K` debug marker from `isr33` after confirming the interrupt path worked.
+- Updated `docs/INTERNALS.md` so the reference matches the current boot, GDT, IDT, PIC, ISR, and debug-console behavior.
+- Updated `.gitignore` so generated build artifacts are not treated like source files.
+
+### 🐛 Problems Diagnosed
+| Symptom | Actual Cause | Fix / Result |
+|---|---|---|
+| `make run` failed with `gtk initialization failed` | QEMU was trying to open a GUI window in a no-GUI environment | Added `run-curses` and `run-debug` |
+| Boot looked blank in curses/headless mode | The kernel was running, but VGA output was not visible through that display path | Added QEMU debug-console output on port `0xE9` |
+| Linker warned about executable stack | NASM objects did not declare `.note.GNU-stack` | Added stack metadata sections |
+| Unsure if keyboard ISR was firing | No visible proof from the handler | Temporarily wrote `K` to VGA top-right, then removed it after confirmation |
+| Relying on GRUB's segment setup | Kernel entered C without installing its own GDT | Added a simple flat GDT in `boot.asm` |
+
+### ✅ Verification
+```sh
+make
+timeout 6s make run-debug
+```
+
+Observed boot log:
+
+```text
+Welcome to CIndy-OS
+Boot successful
+Kernel loaded successfully
+Integer test: 12345
+Hex test: 0XDEADBEEF
+Testing ports
+Initializing IDT...
+IDT loaded successfully
+Remapping PIC...
+PIC remapped successfully
+Enabling interrupts...
+Interrupts enabled.
+```
+
+Manual QEMU check also confirmed raw keyboard scancodes appear when keys are pressed and released.
+
+### 📚 What I Learned Today
+- A clean build does not always mean a visible boot. Display output can fail while the kernel is actually running.
+- Debug ports are extremely useful in OS development because they bypass screen-mode problems.
+- The PIC and CPU interrupt flag are two separate gates: `sti` enables interrupts globally, while PIC masks decide which IRQ lines are allowed.
+- Keyboard scancodes include both press and release events. Release scancodes usually have the high bit set, such as `0x9C` for Enter release.
+- A Multiboot kernel should still take ownership of its own GDT and segment registers before trusting C code.
+- Generated files like `.o`, `.bin`, `.iso`, and copied ISO payloads should stay out of normal source commits.
+
+### Next Small Step
+- Move keyboard logic out of `kernel.c` into `src/keyboard.c`.
+- Filter release scancodes.
+- Add a Set 1 scancode-to-ASCII table.
+- Start echoing actual characters instead of raw hex values.
+
+---
+
+## Week 3 — *(Next)*
+**Phase:** Real Keyboard Input
+
+Raw keyboard interrupts are now working. The next goal is to turn raw scancodes into useful typed input.
 
 **Planned:**
-- [ ] Write `idt_load.asm` — call `lidt [idtp]` to actually install the IDT into the CPU
-- [ ] Write `keyboard_handler()` in C — reads scancode from port `0x60`
+- [x] Write `idt_load.asm` — call `lidt [idtp]` to actually install the IDT into the CPU
+- [x] Write `keyboard_handler()` in C — reads scancode from port `0x60`
+- [x] Send PIC EOI (`outb(0x20, 0x20)`) at the end of each keyboard ISR
+- [x] Print raw scancodes on screen for debugging
+- [ ] Filter key-release scancodes so key presses are easier to read
 - [ ] Build a scancode → ASCII lookup table (set 1, US layout)
 - [ ] Implement a fixed-size input ring buffer (e.g. 256 chars)
-- [ ] Send PIC EOI (`outb(0x20, 0x20)`) at the end of each keyboard ISR
 - [ ] Echo typed characters to screen using `print()`
 - [ ] Handle `Backspace` (erase last char on screen) and `Enter` (flush buffer)
 - [ ] Add ISR stubs for CPU exceptions 0–31 with a generic C fault handler
@@ -186,25 +290,21 @@ Complete the interrupt plumbing started in Week 2 and get the first real keyboar
 ---
 
 ## Week 4 — *(Upcoming)*
-**Phase:** PIC + Keyboard Input
+**Phase:** Shell Prep + Cleaner Input
 
-With the IDT in place, wire up the 8259 PIC and handle IRQ1 (keyboard). This gives CIndy-OS its first interactive input.
+With raw IRQ1 working, clean up keyboard input enough to support a simple shell.
 
 **Planned:**
-- [ ] Remap the 8259 PIC — offset IRQs to 0x20–0x2F so they don't clash with CPU exceptions
 - [ ] Write `pic_send_eoi(uint8_t irq)` — signal End of Interrupt after each IRQ handler
-- [ ] Register IRQ1 in the IDT and write the keyboard ISR stub in `isr.asm`
-- [ ] Write `keyboard_handler()` in C — reads the scancode from port `0x60`
-- [ ] Build a scancode → ASCII lookup table (set 1, US layout)
-- [ ] Implement a fixed-size input ring buffer (e.g. 256 chars)
-- [ ] Echo typed characters to screen in real time
-- [ ] Handle `Backspace` (erase last char) and `Enter` (flush buffer, return string)
+- [ ] Move keyboard code from `kernel.c` into `src/keyboard.c`
+- [ ] Add `include/keyboard.h`
+- [ ] Echo typed characters to screen in real time using the input buffer
+- [ ] Handle `Backspace` and `Enter` cleanly
 - [ ] Test: type characters in QEMU and see them appear on screen
 
 **New Files:**
 | File | Purpose |
 |---|---|
-| `src/pic.c` + `include/pic.h` | PIC init, EOI, enable/disable IRQ |
 | `src/keyboard.c` + `include/keyboard.h` | IRQ1 handler, scancode table, input buffer |
 
 ---
@@ -213,6 +313,8 @@ With the IDT in place, wire up the 8259 PIC and handle IRQ1 (keyboard). This giv
 **Phase:** Shell
 
 Build a simple interactive command shell on top of the keyboard input system.
+
+> Stretch after the two-week base: this is useful once raw keyboard input becomes line-based input.
 
 **Planned:**
 - [ ] Shell loop: print prompt → read line from keyboard buffer → parse → dispatch → repeat
@@ -296,9 +398,9 @@ Make the project presentable and well-documented for a portfolio/GitHub audience
 | Week | Phase | Status |
 |---|---|---|
 | 1 | Terminal Foundation | ✅ Done |
-| 2 | Debug Utilities + IDT + PIC | ✅ Done |
-| 3 | Keyboard Input & IDT completion | 🔜 Next |
-| 4 | Shell | ⬜ Planned |
+| 2 | Debug Utilities + IDT + PIC + First Keyboard IRQ | ✅ Done |
+| 3 | Real Keyboard Input | 🔜 Next |
+| 4 | Shell Prep + Cleaner Input | ⬜ Planned |
 | 5 | Better Terminal + Timers | ⬜ Planned |
 | 6 | Memory Management | ⬜ Planned |
 | 7 | Polish & Portfolio | ⬜ Planned |
@@ -306,4 +408,3 @@ Make the project presentable and well-documented for a portfolio/GitHub audience
 ---
 
 *"The best way to understand how computers work is to build one."*
-

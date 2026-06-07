@@ -29,10 +29,16 @@ SECTIONS
         *(.data)
     }
 
-    /* Zero-initialised data (BSS) */
+    /* Zero-initialised data (BSS) — IDT and other globals live here */
     .bss ALIGN(4K) :
     {
         *(COMMON)
         *(.bss)
+    }
+
+    /* Stack lives LAST so it can grow downward without hitting BSS data */
+    .stack ALIGN(4K) :
+    {
+        *(.stack)
     }
 }

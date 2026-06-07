@@ -2,8 +2,17 @@
 #include "../include/ports.h"
 #include "../include/idt.h"
 #include "../include/pic.h"
+#include "../include/interrupts.h"
+
+extern void isr33();
+
+volatile unsigned char last_scancode = 0;
+volatile int key_pressed = 0;
+
 void keyboard_handler() {
-    print("KEYBOARD INTERRUPT\n");
+    last_scancode = inb(0x60);
+    key_pressed = 1;
+    outb(0x20, 0x20);   // EOI — must send before returning
 }
 
 void kernel_main() {
@@ -36,4 +45,19 @@ void kernel_main() {
     pic_remap();
 
     print("PIC remapped successfully\n");
+    print("Enabling interrupts...\n");
+    idt_set_gate(33, (unsigned int)isr33, 0x08, 0x8E);
+    enable_interrupts();
+
+    print("Interrupts enabled.\n");
+     while (1) {
+        asm volatile("hlt");
+        if (key_pressed) {
+            key_pressed = 0;
+            print("KEY: ");
+            print_hex(last_scancode);
+            print("\n");
+        }
+    }
+    
 }

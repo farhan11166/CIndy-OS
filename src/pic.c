@@ -19,7 +19,8 @@ void pic_remap() {
     outb(0x21, 0x01);
     outb(0xA1, 0x01);
 
-    // unmask interrupts
-    outb(0x21, 0x00);
-    outb(0xA1, 0x00);
+    // mask all IRQs except IRQ1 (keyboard)
+    // 0xFD = 1111 1101 — bit 1 (IRQ1) unmasked, everything else masked
+    outb(0x21, 0xFD);
+    outb(0xA1, 0xFF);
 }
