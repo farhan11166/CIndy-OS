@@ -280,7 +280,7 @@ Raw keyboard interrupts are now working. The next goal is to turn raw scancodes 
 - [x] Implement a fixed-size input ring buffer (e.g. 256 chars)
 - [x] Echo typed characters to screen using `print()`
 - [x] Handle `Backspace` (erase last char on screen) and `Enter` (flush buffer)
-- [ ] Add ISR stubs for CPU exceptions 0–31 with a generic C fault handler
+- [x] Add ISR stubs for CPU exceptions 0–31 with a generic C fault handler
 
 **New Files:**
 | File | Purpose |

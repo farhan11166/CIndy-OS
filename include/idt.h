@@ -21,6 +21,12 @@ void idt_set_gate(
 );
 
 void idt_init();
+struct registers {
+    unsigned int ds;                                     
+    unsigned int edi, esi, ebp, esp, ebx, edx, ecx, eax;  
+    unsigned int int_no, err_code;                        
+    unsigned int eip, cs, eflags, useresp, ss;           
+};
 extern void idt_load(struct idt_ptr* idtp);
 
 #endif
