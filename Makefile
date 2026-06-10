@@ -11,9 +11,10 @@ all:
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/pic.c -o pic.o
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/keyboard.c -o keyboard.o
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/timer.c -o timer.o
+	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/string.c -o string.o
 
 
-	ld -m elf_i386 -T linker.ld -o kernel.bin boot.o kernel.o screen.o ports.o idt.o pic.o isr.o idt_load.o interrupts.o keyboard.o timer.o
+	ld -m elf_i386 -T linker.ld -o kernel.bin boot.o kernel.o screen.o ports.o idt.o pic.o isr.o idt_load.o interrupts.o keyboard.o timer.o string.o
 
 	cp kernel.bin iso/boot/kernel.bin
 

@@ -309,7 +309,7 @@ With raw IRQ1 working, clean up keyboard input enough to support a simple shell.
 
 ---
 
-## Week 5 — 🚧 In Progress
+## Week 5 — ✅ Done
 **Phase:** Shell
 
 Build a simple interactive command shell on top of the keyboard input system.
@@ -318,7 +318,7 @@ Build a simple interactive command shell on top of the keyboard input system.
 
 **Planned:**
 - [x] Shell loop: print prompt → read line from keyboard buffer → parse → dispatch → repeat
-- [ ] `argc/argv`-style parser: split input on spaces into tokens
+- [x] `argc/argv`-style parser: split input on spaces into tokens
 - [x] Implement built-in commands:
   - `help` — list all available commands
   - `clear` — call `clear_screen()`
@@ -336,19 +336,19 @@ Build a simple interactive command shell on top of the keyboard input system.
 
 ---
 
-## Week 6 — 🚧 In Progress
+## Week 6 — ✅ Done
 **Phase:** Better Terminal + Timers
 
 Polish the terminal experience and add a timer interrupt for time-based features.
 
 **Planned:**
-- [ ] Boot splash screen / ASCII banner on startup
-- [ ] Colored prompt using `set_color()` (e.g. cyan `[CIndy-OS]>`)
-- [ ] Implement screen scrolling — shift all VGA rows up by 1 when cursor hits row 25
+- [x] Boot splash screen / ASCII banner on startup
+- [x] Colored prompt using `set_color()` (e.g. cyan `[CIndy-OS]>`)
+- [x] Implement screen scrolling — shift all VGA rows up by 1 when cursor hits row 25
 - [x] Set up IRQ0 (timer) via the PIT (Programmable Interval Timer) — ~100 Hz tick
 - [x] Maintain a global `tick_count` and expose `get_uptime_seconds()`
 - [x] Add `uptime` shell command
-- [ ] Blinking cursor using timer tick toggling VGA cursor position
+- [x] Blinking cursor by enabling the VGA hardware cursor
 - [ ] Optional: status bar at the bottom row showing uptime + OS name
 
 **New Files:**
@@ -401,7 +401,7 @@ Make the project presentable and well-documented for a portfolio/GitHub audience
 | 2 | Debug Utilities + IDT + PIC + First Keyboard IRQ | ✅ Done |
 | 3 | Real Keyboard Input | 🚧 In Progress |
 | 4 | Shell Prep + Cleaner Input | ✅ Done |
-| 5 | Shell | 🚧 In Progress |
+| 5 | Shell | ✅ Done |
 | 6 | Better Terminal + Timers | ✅ Done (Timers working) |
 | 7 | Memory Management | 🔜 Next |
 | 8 | Polish & Portfolio | ⬜ Planned |

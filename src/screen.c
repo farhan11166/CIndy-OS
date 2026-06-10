@@ -1,9 +1,12 @@
 #include "../include/screen.h"
+#include "../include/ports.h"
 
 volatile char* video_memory =(volatile char*) 0xb8000;
 
 int cursor_row=0;
 int cursor_col=0;
+#define MAX_ROWS 25
+#define MAX_COLS 80
 
 static void debug_putc(char c) {
     __asm__ volatile("outb %0, $0xE9" : : "a"(c));
@@ -63,7 +66,13 @@ void print(const char* msg) {
             cursor_col = 0;
             cursor_row++;
         }
+        if(cursor_row>=MAX_ROWS){
+            scroll_screen();
+            cursor_row=MAX_ROWS-1;
+            cursor_col=0;
+        }
     }
+    update_cursor();
 }
 void print_int(int num){
     char buffer [16];
@@ -101,4 +110,66 @@ void print_hex(unsigned int num){
         print(str);
     }
     
+}
+void scroll_screen(){
+    for(int row=1;row<MAX_ROWS;row++){
+        for(int col=0;col<MAX_COLS;col++){
+            video_memory[(row*80+col)*2]=video_memory[((row+1)*80+col)*2];
+            video_memory[(row*80+col)*2+1]=video_memory[((row+1)*80+col)*2+1];
+        }
+    }
+
+    //clear last row
+    for(int col=0;col<MAX_COLS;col++){
+        video_memory[(MAX_ROWS-1)*80+col*2]=' ';
+        video_memory[(MAX_ROWS-1)*80+col*2+1]=0x0F;
+    }
+    cursor_row=MAX_ROWS-1;
+    
+}
+void print_colored(const char* message , unsigned char color){
+    int i=0;
+    while(message[i]!='\0'){
+        if(message[i]=='\n'){
+            cursor_row++;
+            cursor_col=0;
+        }
+        else{
+            int offset=(cursor_row*80+cursor_col)*2;
+            video_memory[offset]=message[i];
+            video_memory[offset+1]=color;
+            cursor_col++;
+            if (cursor_col >= MAX_COLS) {
+                cursor_col = 0;
+                cursor_row++;
+            }
+        }
+         if (cursor_row >= MAX_ROWS) {
+            scroll_screen();
+            cursor_row=MAX_ROWS-1;
+            cursor_col=0;
+        }
+        i++;
+    }
+    update_cursor();
+}
+void update_cursor() {
+    unsigned short pos = cursor_row * MAX_COLS + cursor_col;
+    
+    // VGA cursor command ports are 0x3D4 and 0x3D5
+    // 0x0F = low byte, 0x0E = high byte
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (unsigned char)(pos & 0xFF));
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (unsigned char)((pos >> 8) & 0xFF));
+}
+
+void enable_cursor(unsigned char cursor_start, unsigned char cursor_end) {
+    // 0x0A is the cursor start register
+    outb(0x3D4, 0x0A);
+    outb(0x3D5, (inb(0x3D5) & 0xC0) | cursor_start);
+ 
+    // 0x0B is the cursor end register
+    outb(0x3D4, 0x0B);
+    outb(0x3D5, (inb(0x3D5) & 0xE0) | cursor_end);
 }

@@ -29,6 +29,14 @@ void keyboard_handler() {
 void kernel_main() {
 
     clear_screen();
+    enable_cursor(14, 15);
+    print_colored("   ____ ___           _           ___  ____  \n", 0x0A);
+    print_colored("  / ___|_ _|____   __| |_   _    / _ \\/ ___| \n", 0x0A);
+    print_colored(" | |    | | '_ \\ \\ / / | | | |  | | | \\___ \\ \n", 0x0A);
+    print_colored(" | |___ | | | | \\ V /| | |_| |  | |_| |___) |\n", 0x0A);
+    print_colored("  \\____|___|_| |_|\\_/ |_|\\__, |  \\___/|____/ \n", 0x0A);
+    print_colored("                         |___/               \n", 0x0A);
+    print("\n");
 
     print("Welcome to CIndy-OS\n");
     print("Boot successful\n");
@@ -98,7 +106,7 @@ void kernel_main() {
     //int a=1/0;
 
     print("Interrupts enabled.\n");
-    print("[CIndy-OS]> ");
+    print_colored("\n[CIndy-OS]> ", 0x0B);
     while(1){
         asm volatile("hlt");
     }

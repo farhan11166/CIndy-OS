@@ -422,16 +422,12 @@ vga[offset]     = character;   // ASCII byte
 vga[offset + 1] = 0x0F;        // attribute: white on black
 ```
 
-### Common Attribute Bytes
+### Advanced VGA Control
 
-| Value | Meaning |
-|-------|---------|
-| `0x0F` | White text, black background |
-| `0x07` | Light grey text, black background |
-| `0x0A` | Light green text, black background |
-| `0x0C` | Light red text, black background |
-| `0x1F` | White text, blue background |
-| `0x6F` | White text, brown background |
+Because we write directly to memory, our kernel handles all terminal logic manually:
+- **Colors**: By passing custom attribute bytes (e.g., `0x0A` for light green, `0x0B` for cyan), we implemented a colored prompt and boot banner.
+- **Scrolling**: When the cursor reaches the bottom row (row 25), the kernel copies rows 1-24 up to rows 0-23 in memory, and fills row 24 with empty spaces.
+- **Hardware Cursor**: The blinking cursor is controlled by VGA I/O ports `0x3D4` and `0x3D5`. GRUB disables it by default, so the kernel un-hides it by setting the scanline registers (`0x0A` and `0x0B`) and continuously updates its position using the high and low position registers (`0x0E` and `0x0F`).
 
 ---
 
@@ -748,14 +744,23 @@ The PIT generates an interrupt (IRQ0 / Interrupt 32) at a programmable frequency
 
 By ticking a variable every time IRQ0 fires, we can track system uptime and implement sleep functions.
 
-## 15. Keyboard Driver & Simple Shell
+## 15. Keyboard Driver & Shell (`argc/argv` Parser)
 
 When IRQ1 fires (Keyboard), the PIC signals the CPU, which looks up the IDT and calls `isr33`, eventually reaching `keyboard_handler()`.
 - The handler reads the scancode from port `0x60`.
 - The driver ignores key releases (scancodes with the high bit `0x80` set).
 - It maps the scancode to ASCII using a lookup table (`kbd_us`).
 - It manages an `input_buffer` to capture user input.
-- Special handling for `\b` (backspace) and `\n` (Enter) allows for a rudimentary interactive shell that parses strings and executes commands (like `help`, `clear`, `uptime`).
+- When `\n` (Enter) is pressed, the shell processes the `input_buffer` by splitting it into an `argc` (argument count) and `argv` (argument vector) array. It replaces spaces with null-terminators (`\0`) to extract individual words.
+- These words are compared using a custom `strcmp` function (since we have no `<string.h>`) to dispatch built-in commands like `help`, `echo`, `version`, and `reboot`.
+
+## 16. CPU Exceptions (0-31)
+
+If the kernel performs an illegal operation (e.g., dividing by zero, accessing invalid memory, executing an invalid opcode), the CPU triggers a hardware exception.
+- We registered 32 Interrupt Service Routines (`isr0` through `isr31`) in the IDT to catch these.
+- Some exceptions push an error code to the stack; for those that don't, our assembly stubs push a dummy `0` to keep the stack frame uniform.
+- All 32 stubs jump to `isr_common_stub`, which saves all registers and calls a generic C `fault_handler()`.
+- The handler prints the specific exception (e.g., "Page Fault" or "Division By Zero") and halts the CPU. This prevents QEMU from silently rebooting, providing the "Blue Screen of Death" needed to debug kernel panics.
 
 ---
 

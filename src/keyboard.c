@@ -2,6 +2,7 @@
 #include "../include/screen.h"
 #include "../include/ports.h"
 #include "../include/timer.h"
+#include "../include/string.h"
 extern volatile unsigned int timer_ticks;
 const char kbd_us[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',   
@@ -16,32 +17,74 @@ int buffer_index=0;
 
 void execute_command(){
     print("\n");
-    if (input_buffer[0] == 'h' && input_buffer[1] == 'e' && input_buffer[2] == 'l' && input_buffer[3] == 'p' && buffer_index==4) {
-        print("Available commands: help, clear,echo,timer");
-        
-    } else if (input_buffer[0] == 'c' && input_buffer[1] == 'l' && input_buffer[2] == 'e' && input_buffer[3] == 'a' && input_buffer[4] == 'r'&& buffer_index==5) {
-        clear_screen();
-    } else if (input_buffer[0] == 't' && input_buffer[1] == 'i' && input_buffer[2] == 'm' && input_buffer[3] == 'e' && input_buffer[4] == 'r'&& buffer_index==5) {
-        print_int(timer_ticks/100);
-        print(" seconds");
+    int argc=0;
+    char *argv[16];
+    for(int i=0;input_buffer[i]!='\0' && argc<16;){
+        while(input_buffer[i]==' '){
+            i++;
+        }
+        if(input_buffer[i]!='\0'){
+            argv[argc]=&input_buffer[i];
+            while(input_buffer[i]!='\0' && input_buffer[i]!=' '){
+                i++;
+            }
+            if (input_buffer[i] == ' ') {//checking for space if it is eod the autmoatically the loop ends
+            input_buffer[i] = '\0';
+            i++;
+            }
+            argc++;
+        }
     }
-    else if(input_buffer[0]=='e' && input_buffer[1]=='c' && input_buffer[2]=='h' && input_buffer[3]=='o' && buffer_index>=4){
-        if(buffer_index==4){
-            print("No string passed \n");
+    if(argc>0){
+        if(strcmp(argv[0],"help")==0){
+             print("Available commands: help, clear, echo, timer, about, version, reboot\n"); 
+        }
+        else if(strcmp(argv[0],"clear")==0){
+            clear_screen();
+        }
+         else if (strcmp(argv[0], "timer") == 0) {
+            print_int(timer_ticks / 100);
+            print(" seconds\n");
+        } 
+        else if (strcmp(argv[0], "about") == 0) {
+            print("CIndy-OS - A bare-metal hobby OS built from scratch.\n");
+        } 
+        else if (strcmp(argv[0], "version") == 0) {
+            print("CIndy-OS Kernel v0.1\n");
+        }
+        else if (strcmp(argv[0], "reboot") == 0) {
+            print("Rebooting...\n");
+            outb(0x64, 0xFE); // Tell keyboard controller to pulse the CPU reset line
+            while(1);         // Wait for the reset
+        }
+        else if(strcmp(argv[0],"echo")==0){
+            if(argc==1){
+                print("No string passed");
+            }
+            else{
+                for(int i=1;i<argc;i++){
+                    print(argv[i]);
+                    if(i!=(argc-1)){
+                        print(" ");
+                    }
+               }
+               print("\n");
+            }
         }
         else{
-            if(input_buffer[5]!='\0'){
-                print(input_buffer+5);
-            }
+            print("Unknown command: ");
+            print(argv[0]);
             print("\n");
+        }
+
+        
+
+
+
+
     }
-    }
-     else if (buffer_index > 0) {
-        print("Unknown command: ");
-        print(input_buffer);
-    }
-    
-    print("\n[CIndy-OS]> ");
+    print("\n");
+    print_colored("[CIndy-OS]> ", 0x0B);
 
     buffer_index=0;
     for(int i=0;i<BUFFER_SIZE;i++){

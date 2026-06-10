@@ -6,12 +6,13 @@ A bare-metal x86 hobby operating system that boots via GRUB, written from scratc
 
 ## 📸 What it does right now
 
-When booted, CIndy-OS:
-1. Clears the VGA text-mode screen
-2. Prints **"Boot Successful"** on row 0
-3. Prints **"Welcome to CIndy-os"** on row 1
+When booted, CIndy-OS initializes its own GDT, sets up the IDT, remaps the Programmable Interrupt Controller (PIC), and provides a fully interactive environment:
+1. **Hardware Interrupts**: Handles timer ticks (IRQ0) and keyboard input (IRQ1).
+2. **CPU Exceptions**: Catches and handles 32 different CPU exceptions (like Divide by Zero and Page Faults) preventing silent reboots.
+3. **Interactive Shell**: Features a command-line interface with an `argc/argv` parser.
+4. **Built-in Commands**: Try typing `help`, `about`, `version`, `timer`, `echo`, or `reboot`!
 
-All output is written directly to the VGA text buffer at physical address `0xB8000` — no OS, no libc, no drivers.
+All output is written directly to the VGA text buffer at physical address `0xB8000`, and input is processed directly from the PS/2 controller port `0x60`.
 
 ---
 
