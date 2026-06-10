@@ -3,15 +3,16 @@
 #include "../include/idt.h"
 #include "../include/pic.h"
 #include "../include/interrupts.h"
-
+#include "../include/timer.h"
+#include "../include/keyboard.h"
 extern void isr33();
+extern void isr32();
+extern void timer_handler();
 
-volatile unsigned char last_scancode = 0;
-volatile int key_pressed = 0;
 
 void keyboard_handler() {
-    last_scancode = inb(0x60);
-    key_pressed = 1;
+    unsigned char scancode = inb(0x60);
+    handle_keyboard_interrupt(scancode);
     outb(0x20, 0x20);   // EOI — must send before returning
 }
 
@@ -46,18 +47,15 @@ void kernel_main() {
 
     print("PIC remapped successfully\n");
     print("Enabling interrupts...\n");
+    init_timer(100);
+    idt_set_gate(32, (unsigned int)isr32, 0x08, 0x8E);
     idt_set_gate(33, (unsigned int)isr33, 0x08, 0x8E);
     enable_interrupts();
 
     print("Interrupts enabled.\n");
-     while (1) {
+    print("[CIndy-OS]> ");
+    while(1){
         asm volatile("hlt");
-        if (key_pressed) {
-            key_pressed = 0;
-            print("KEY: ");
-            print_hex(last_scancode);
-            print("\n");
-        }
     }
     
 }

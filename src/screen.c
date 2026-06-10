@@ -39,6 +39,18 @@ void print(const char* msg) {
             offset = (cursor_row * 80 + cursor_col) * 2;
             continue;
         }
+        if(msg[i]=='\b'){
+        if(cursor_col>0){
+            cursor_col--;
+        }
+        else if(cursor_row>0){
+            cursor_row--;
+            cursor_col=79;
+        }
+        offset=(cursor_row*80 + cursor_col)*2;
+
+        continue;
+        }
 
         video_memory[offset] = msg[i];
         video_memory[offset + 1] = 0x6F;
@@ -88,4 +100,5 @@ void print_hex(unsigned int num){
 
         print(str);
     }
+    
 }

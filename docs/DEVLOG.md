@@ -265,7 +265,7 @@ Manual QEMU check also confirmed raw keyboard scancodes appear when keys are pre
 
 ---
 
-## Week 3 — *(Next)*
+## Week 3 — 🚧 In Progress
 **Phase:** Real Keyboard Input
 
 Raw keyboard interrupts are now working. The next goal is to turn raw scancodes into useful typed input.
@@ -275,11 +275,11 @@ Raw keyboard interrupts are now working. The next goal is to turn raw scancodes 
 - [x] Write `keyboard_handler()` in C — reads scancode from port `0x60`
 - [x] Send PIC EOI (`outb(0x20, 0x20)`) at the end of each keyboard ISR
 - [x] Print raw scancodes on screen for debugging
-- [ ] Filter key-release scancodes so key presses are easier to read
-- [ ] Build a scancode → ASCII lookup table (set 1, US layout)
-- [ ] Implement a fixed-size input ring buffer (e.g. 256 chars)
-- [ ] Echo typed characters to screen using `print()`
-- [ ] Handle `Backspace` (erase last char on screen) and `Enter` (flush buffer)
+- [x] Filter key-release scancodes so key presses are easier to read
+- [x] Build a scancode → ASCII lookup table (set 1, US layout)
+- [x] Implement a fixed-size input ring buffer (e.g. 256 chars)
+- [x] Echo typed characters to screen using `print()`
+- [x] Handle `Backspace` (erase last char on screen) and `Enter` (flush buffer)
 - [ ] Add ISR stubs for CPU exceptions 0–31 with a generic C fault handler
 
 **New Files:**
@@ -289,18 +289,18 @@ Raw keyboard interrupts are now working. The next goal is to turn raw scancodes 
 
 ---
 
-## Week 4 — *(Upcoming)*
+## Week 4 — ✅ Done
 **Phase:** Shell Prep + Cleaner Input
 
 With raw IRQ1 working, clean up keyboard input enough to support a simple shell.
 
 **Planned:**
-- [ ] Write `pic_send_eoi(uint8_t irq)` — signal End of Interrupt after each IRQ handler
-- [ ] Move keyboard code from `kernel.c` into `src/keyboard.c`
-- [ ] Add `include/keyboard.h`
-- [ ] Echo typed characters to screen in real time using the input buffer
-- [ ] Handle `Backspace` and `Enter` cleanly
-- [ ] Test: type characters in QEMU and see them appear on screen
+- [x] Write `pic_send_eoi(uint8_t irq)` — signal End of Interrupt after each IRQ handler
+- [x] Move keyboard code from `kernel.c` into `src/keyboard.c`
+- [x] Add `include/keyboard.h`
+- [x] Echo typed characters to screen in real time using the input buffer
+- [x] Handle `Backspace` and `Enter` cleanly
+- [x] Test: type characters in QEMU and see them appear on screen
 
 **New Files:**
 | File | Purpose |
@@ -309,7 +309,7 @@ With raw IRQ1 working, clean up keyboard input enough to support a simple shell.
 
 ---
 
-## Week 5 — *(Upcoming)*
+## Week 5 — 🚧 In Progress
 **Phase:** Shell
 
 Build a simple interactive command shell on top of the keyboard input system.
@@ -317,17 +317,17 @@ Build a simple interactive command shell on top of the keyboard input system.
 > Stretch after the two-week base: this is useful once raw keyboard input becomes line-based input.
 
 **Planned:**
-- [ ] Shell loop: print prompt → read line from keyboard buffer → parse → dispatch → repeat
+- [x] Shell loop: print prompt → read line from keyboard buffer → parse → dispatch → repeat
 - [ ] `argc/argv`-style parser: split input on spaces into tokens
-- [ ] Implement built-in commands:
+- [x] Implement built-in commands:
   - `help` — list all available commands
   - `clear` — call `clear_screen()`
   - `echo <text>` — print the arguments back
   - `about` — print OS name, version, author
   - `version` — print kernel version string
   - `reboot` — triple-fault or use keyboard controller reset
-- [ ] Unknown command → print `"Unknown command: <input>"`
-- [ ] Prompt format: `[CIndy-OS]> `
+- [x] Unknown command → print `"Unknown command: <input>"`
+- [x] Prompt format: `[CIndy-OS]> `
 
 **New Files:**
 | File | Purpose |
@@ -336,7 +336,7 @@ Build a simple interactive command shell on top of the keyboard input system.
 
 ---
 
-## Week 6 — *(Upcoming)*
+## Week 6 — 🚧 In Progress
 **Phase:** Better Terminal + Timers
 
 Polish the terminal experience and add a timer interrupt for time-based features.
@@ -345,9 +345,9 @@ Polish the terminal experience and add a timer interrupt for time-based features
 - [ ] Boot splash screen / ASCII banner on startup
 - [ ] Colored prompt using `set_color()` (e.g. cyan `[CIndy-OS]>`)
 - [ ] Implement screen scrolling — shift all VGA rows up by 1 when cursor hits row 25
-- [ ] Set up IRQ0 (timer) via the PIT (Programmable Interval Timer) — ~100 Hz tick
-- [ ] Maintain a global `tick_count` and expose `get_uptime_seconds()`
-- [ ] Add `uptime` shell command
+- [x] Set up IRQ0 (timer) via the PIT (Programmable Interval Timer) — ~100 Hz tick
+- [x] Maintain a global `tick_count` and expose `get_uptime_seconds()`
+- [x] Add `uptime` shell command
 - [ ] Blinking cursor using timer tick toggling VGA cursor position
 - [ ] Optional: status bar at the bottom row showing uptime + OS name
 
@@ -358,7 +358,7 @@ Polish the terminal experience and add a timer interrupt for time-based features
 
 ---
 
-## Week 7 — *(Upcoming)*
+## Week 7 — 🔜 Next
 **Phase:** Memory Management
 
 Give the kernel the ability to understand and allocate memory.
@@ -399,11 +399,12 @@ Make the project presentable and well-documented for a portfolio/GitHub audience
 |---|---|---|
 | 1 | Terminal Foundation | ✅ Done |
 | 2 | Debug Utilities + IDT + PIC + First Keyboard IRQ | ✅ Done |
-| 3 | Real Keyboard Input | 🔜 Next |
-| 4 | Shell Prep + Cleaner Input | ⬜ Planned |
-| 5 | Better Terminal + Timers | ⬜ Planned |
-| 6 | Memory Management | ⬜ Planned |
-| 7 | Polish & Portfolio | ⬜ Planned |
+| 3 | Real Keyboard Input | 🚧 In Progress |
+| 4 | Shell Prep + Cleaner Input | ✅ Done |
+| 5 | Shell | 🚧 In Progress |
+| 6 | Better Terminal + Timers | ✅ Done (Timers working) |
+| 7 | Memory Management | 🔜 Next |
+| 8 | Polish & Portfolio | ⬜ Planned |
 
 ---
 

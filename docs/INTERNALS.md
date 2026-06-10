@@ -739,4 +739,24 @@ Attribute 0x6F: white text on brown background
 
 ---
 
+## 14. Programmable Interval Timer (PIT)
+
+The PIT generates an interrupt (IRQ0 / Interrupt 32) at a programmable frequency.
+- **Port `0x43`**: Command port to configure the timer.
+- **Port `0x40`**: Data port to set the frequency divisor.
+- **Formula**: `1193180 / target_frequency = divisor`.
+
+By ticking a variable every time IRQ0 fires, we can track system uptime and implement sleep functions.
+
+## 15. Keyboard Driver & Simple Shell
+
+When IRQ1 fires (Keyboard), the PIC signals the CPU, which looks up the IDT and calls `isr33`, eventually reaching `keyboard_handler()`.
+- The handler reads the scancode from port `0x60`.
+- The driver ignores key releases (scancodes with the high bit `0x80` set).
+- It maps the scancode to ASCII using a lookup table (`kbd_us`).
+- It manages an `input_buffer` to capture user input.
+- Special handling for `\b` (backspace) and `\n` (Enter) allows for a rudimentary interactive shell that parses strings and executes commands (like `help`, `clear`, `uptime`).
+
+---
+
 *Keep this document updated as CIndy-OS grows. Add a new section each time you touch a new subsystem.*

@@ -21,6 +21,6 @@ void pic_remap() {
 
     // mask all IRQs except IRQ1 (keyboard)
     // 0xFD = 1111 1101 — bit 1 (IRQ1) unmasked, everything else masked
-    outb(0x21, 0xFD);
+    outb(0x21, 0xFC);
     outb(0xA1, 0xFF);
 }

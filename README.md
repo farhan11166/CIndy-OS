@@ -136,11 +136,12 @@ qemu-system-i386 -cdrom CIndy-os.iso
 
 ## 🗺️ Roadmap / Next Steps
 
-- [ ] GDT (Global Descriptor Table) setup
-- [ ] IDT (Interrupt Descriptor Table) + basic interrupt handling
-- [ ] PS/2 keyboard driver
-- [ ] Memory management (physical memory map via Multiboot info)
-- [ ] Simple shell / command input
+- [x] GDT (Global Descriptor Table) flat setup
+- [x] IDT (Interrupt Descriptor Table) + basic interrupt handling
+- [x] Programmable Interval Timer (PIT)
+- [x] PS/2 keyboard driver
+- [x] Simple shell / command input
+- [ ] Memory management (PMM, Paging, kmalloc)
 - [ ] Basic filesystem (read-only FAT or custom)
 
 ---
