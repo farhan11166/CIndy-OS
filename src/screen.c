@@ -34,42 +34,37 @@ void print(const char* msg) {
     int offset = (cursor_row * 80 + cursor_col) * 2;
 
     for (int i = 0; msg[i] != '\0'; i++) {
-
         if (msg[i] == '\n') {
             debug_putc('\n');
             cursor_row++;
             cursor_col = 0;
-            offset = (cursor_row * 80 + cursor_col) * 2;
-            continue;
         }
-        if(msg[i]=='\b'){
-        if(cursor_col>0){
-            cursor_col--;
+        else if (msg[i] == '\b') {
+            if (cursor_col > 0) {
+                cursor_col--;
+            } else if (cursor_row > 0) {
+                cursor_row--;
+                cursor_col = 79;
+            }
         }
-        else if(cursor_row>0){
-            cursor_row--;
-            cursor_col=79;
-        }
-        offset=(cursor_row*80 + cursor_col)*2;
+        else {
+            int offset = (cursor_row * 80 + cursor_col) * 2;
+            video_memory[offset] = msg[i];
+            video_memory[offset + 1] = 0x6F; // brown!
+            debug_putc(msg[i]);
 
-        continue;
+            cursor_col++;
+            if (cursor_col >= 80) {
+                cursor_col = 0;
+                cursor_row++;
+            }
         }
 
-        video_memory[offset] = msg[i];
-        video_memory[offset + 1] = 0x6F;
-        debug_putc(msg[i]);
-
-        offset += 2;
-        cursor_col++;
-
-        if (cursor_col >= 80) {
-            cursor_col = 0;
-            cursor_row++;
-        }
-        if(cursor_row>=MAX_ROWS){
+        // Check for scrolling AFTER updating cursor positions
+        if (cursor_row >= MAX_ROWS) {
             scroll_screen();
-            cursor_row=MAX_ROWS-1;
-            cursor_col=0;
+            // scroll_screen already sets cursor_row to MAX_ROWS - 1
+            // We do NOT touch cursor_col, because we want to continue printing on the same line if it just wrapped!
         }
     }
     update_cursor();
@@ -112,17 +107,19 @@ void print_hex(unsigned int num){
     
 }
 void scroll_screen(){
+    // Copy rows 1-24 UP to rows 0-23
     for(int row=1;row<MAX_ROWS;row++){
         for(int col=0;col<MAX_COLS;col++){
-            video_memory[(row*80+col)*2]=video_memory[((row+1)*80+col)*2];
-            video_memory[(row*80+col)*2+1]=video_memory[((row+1)*80+col)*2+1];
+            video_memory[((row-1)*80+col)*2] = video_memory[(row*80+col)*2];
+            video_memory[((row-1)*80+col)*2+1] = video_memory[(row*80+col)*2+1];
         }
     }
 
     //clear last row
     for(int col=0;col<MAX_COLS;col++){
-        video_memory[(MAX_ROWS-1)*80+col*2]=' ';
-        video_memory[(MAX_ROWS-1)*80+col*2+1]=0x0F;
+        int offset = ((MAX_ROWS - 1) * MAX_COLS + col) * 2;
+        video_memory[offset] = ' ';
+        video_memory[offset + 1] = 0x0F;
     }
     cursor_row=MAX_ROWS-1;
     
@@ -146,8 +143,6 @@ void print_colored(const char* message , unsigned char color){
         }
          if (cursor_row >= MAX_ROWS) {
             scroll_screen();
-            cursor_row=MAX_ROWS-1;
-            cursor_col=0;
         }
         i++;
     }

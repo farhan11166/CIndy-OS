@@ -37,23 +37,23 @@ void execute_command(){
     }
     if(argc>0){
         if(strcmp(argv[0],"help")==0){
-             print("Available commands: help, clear, echo, timer, about, version, reboot\n"); 
+             print("Available commands: help, clear, echo, timer, about, version, reboot");
         }
         else if(strcmp(argv[0],"clear")==0){
             clear_screen();
         }
          else if (strcmp(argv[0], "timer") == 0) {
             print_int(timer_ticks / 100);
-            print(" seconds\n");
+            print(" seconds");
         } 
         else if (strcmp(argv[0], "about") == 0) {
-            print("CIndy-OS - A bare-metal hobby OS built from scratch.\n");
+            print("CIndy-OS - A bare-metal hobby OS built from scratch.");
         } 
         else if (strcmp(argv[0], "version") == 0) {
-            print("CIndy-OS Kernel v0.1\n");
+            print("CIndy-OS Kernel v0.1");
         }
         else if (strcmp(argv[0], "reboot") == 0) {
-            print("Rebooting...\n");
+            print("Rebooting...");
             outb(0x64, 0xFE); // Tell keyboard controller to pulse the CPU reset line
             while(1);         // Wait for the reset
         }
@@ -68,20 +68,12 @@ void execute_command(){
                         print(" ");
                     }
                }
-               print("\n");
             }
         }
         else{
             print("Unknown command: ");
             print(argv[0]);
-            print("\n");
         }
-
-        
-
-
-
-
     }
     print("\n");
     print_colored("[CIndy-OS]> ", 0x0B);
