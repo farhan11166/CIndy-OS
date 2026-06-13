@@ -17,6 +17,12 @@ all:
 	ld -m elf_i386 -T linker.ld -o kernel.bin boot.o kernel.o screen.o ports.o idt.o pic.o isr.o idt_load.o interrupts.o keyboard.o timer.o string.o memory.o
 
 	cp kernel.bin iso/boot/kernel.bin
+	cd fs && tar -cvf ../initrd.tar *
+			cp initrd.tar iso/boot/initrd.tar
+	
+
+	
+
 
 	grub-mkrescue -o CIndy-os.iso iso
 

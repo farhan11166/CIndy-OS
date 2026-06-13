@@ -358,18 +358,18 @@ Polish the terminal experience and add a timer interrupt for time-based features
 
 ---
 
-## Week 7 — 🔜 Next
+## Week 7 — ✅ Done
 **Phase:** Memory Management
 
 Give the kernel the ability to understand and allocate memory.
 
 **Planned:**
-- [ ] Parse the Multiboot info struct passed by GRUB — extract the memory map
-- [ ] Print memory regions in `meminfo` using `khex` (base address, length, type)
-- [ ] Implement a simple **bump allocator** (`kmalloc(size_t size)`) — linearly advances a pointer through free memory
-- [ ] Track total allocated bytes
-- [ ] Add `meminfo` shell command — show total RAM, used, free
-- [ ] Optional: implement `kfree()` as a no-op stub (for API completeness)
+- [x] Parse the Multiboot info struct passed by GRUB — extract the memory map
+- [x] Print memory regions in `meminfo` using `khex` (base address, length, type)
+- [x] Implement a simple **bump allocator** (`kmalloc(size_t size)`) — linearly advances a pointer through free memory
+- [x] Track total allocated bytes
+- [x] Add `meminfo` shell command — show total RAM, used, free
+- [x] Optional: implement `kfree()` as a no-op stub (for API completeness)
 
 **New Files:**
 | File | Purpose |
@@ -378,7 +378,7 @@ Give the kernel the ability to understand and allocate memory.
 
 ---
 
-## Week 8 — *(Upcoming)*
+## Week 8 — 🚧 In Progress
 **Phase:** Polish & Portfolio
 
 Make the project presentable and well-documented for a portfolio/GitHub audience.
@@ -402,9 +402,9 @@ Make the project presentable and well-documented for a portfolio/GitHub audience
 | 3 | Real Keyboard Input | 🚧 In Progress |
 | 4 | Shell Prep + Cleaner Input | ✅ Done |
 | 5 | Shell | ✅ Done |
-| 6 | Better Terminal + Timers | ✅ Done (Timers working) |
-| 7 | Memory Management | 🔜 Next |
-| 8 | Polish & Portfolio | ⬜ Planned |
+| 6 | Better Terminal + Timers | ✅ Done |
+| 7 | Memory Management | ✅ Done |
+| 8 | Polish & Portfolio | 🚧 In Progress |
 
 ---
 

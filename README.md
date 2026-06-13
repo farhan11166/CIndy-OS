@@ -10,7 +10,8 @@ When booted, CIndy-OS initializes its own GDT, sets up the IDT, remaps the Progr
 1. **Hardware Interrupts**: Handles timer ticks (IRQ0) and keyboard input (IRQ1).
 2. **CPU Exceptions**: Catches and handles 32 different CPU exceptions (like Divide by Zero and Page Faults) preventing silent reboots.
 3. **Interactive Shell**: Features a command-line interface with an `argc/argv` parser.
-4. **Built-in Commands**: Try typing `help`, `about`, `version`, `timer`, `echo`, or `reboot`!
+4. **Built-in Commands**: Try typing `help`, `about`, `version`, `timer`, `echo`, `meminfo`, or `reboot`!
+5. **Memory Management**: Parses the GRUB Multiboot memory map and provides a dynamic bump allocator (`kmalloc`).
 
 All output is written directly to the VGA text buffer at physical address `0xB8000`, and input is processed directly from the PS/2 controller port `0x60`.
 
@@ -142,7 +143,7 @@ qemu-system-i386 -cdrom CIndy-os.iso
 - [x] Programmable Interval Timer (PIT)
 - [x] PS/2 keyboard driver
 - [x] Simple shell / command input
-- [ ] Memory management (PMM, Paging, kmalloc)
+- [x] Memory management (PMM, Paging, kmalloc)
 - [ ] Basic filesystem (read-only FAT or custom)
 
 ---

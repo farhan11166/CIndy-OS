@@ -762,6 +762,15 @@ If the kernel performs an illegal operation (e.g., dividing by zero, accessing i
 - All 32 stubs jump to `isr_common_stub`, which saves all registers and calls a generic C `fault_handler()`.
 - The handler prints the specific exception (e.g., "Page Fault" or "Division By Zero") and halts the CPU. This prevents QEMU from silently rebooting, providing the "Blue Screen of Death" needed to debug kernel panics.
 
+## 17. Memory Management (Bump Allocator)
+
+To dynamically allocate memory, the kernel must first know how much physical RAM is available and which parts are safe to touch.
+- By setting `FLAGS equ 3` in `boot.asm`, we instruct the GRUB bootloader to parse the BIOS memory map (via `INT 0x15`) and pass it to our kernel via the `multiboot_info` structure pointer (pushed to the stack via `ebx`).
+- `init_memory()` parses this `mmap_length` and iterates through the `multiboot_mmap_entry` structs. It only counts memory regions where `type == 1` (Usable RAM), adding it to `total_memory`.
+- Since implementing standard `malloc()` and `free()` involves complex block-splitting algorithms, we built a **Bump Allocator** (`kmalloc`).
+- `kmalloc()` maintains a `free_mem_addr` pointer (starting at `0x200000`, well above the kernel to prevent overwriting code). When `kmalloc(size)` is called, it rounds the size up to the nearest 4-byte boundary (for CPU alignment), returns the current pointer, and "bumps" the pointer forward by the size requested.
+- **Limitation**: A bump allocator cannot free memory. It is purely designed to permanently allocate structures during early OS initialization.
+
 ---
 
 *Keep this document updated as CIndy-OS grows. Add a new section each time you touch a new subsystem.*

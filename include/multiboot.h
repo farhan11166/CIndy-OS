@@ -25,5 +25,10 @@ struct multiboot_info {
     unsigned int mmap_length;
     unsigned int mmap_addr;
 } __attribute__((packed));
-
+struct multiboot_mod_list {
+    unsigned int mod_start;  // Physical memory address where the file begins
+    unsigned int mod_end;    // Physical memory address where the file ends
+    unsigned int cmdline;
+    unsigned int pad;
+} __attribute__((packed));
 #endif
