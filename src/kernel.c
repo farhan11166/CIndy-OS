@@ -26,7 +26,7 @@ void keyboard_handler() {
     outb(0x20, 0x20);   // EOI — must send before returning
 }
 
-void kernel_main() {
+void kernel_main(unsigned int magic, struct multiboot_info* mbd) {
 
     clear_screen();
     enable_cursor(14, 15);
@@ -99,10 +99,12 @@ void kernel_main() {
 
     print("PIC remapped successfully\n");
     print("Enabling interrupts...\n");
-    init_timer(100);
+    
     idt_set_gate(32, (unsigned int)isr32, 0x08, 0x8E);
     idt_set_gate(33, (unsigned int)isr33, 0x08, 0x8E);
     enable_interrupts();
+    init_timer(100);
+    init_memory(mbd,magic);
     //int a=1/0;
 
     print("Interrupts enabled.\n");

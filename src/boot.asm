@@ -2,7 +2,7 @@ global start
 extern kernel_main
 
 MAGIC     equ 0x1BADB002
-FLAGS     equ 0
+FLAGS     equ 3
 CHECKSUM  equ -(MAGIC + FLAGS)
 CODE_SEG  equ gdt_code - gdt_start
 DATA_SEG  equ gdt_data - gdt_start
@@ -30,14 +30,16 @@ start:
     jmp CODE_SEG:flush_segments
 
 flush_segments:
-    mov ax, DATA_SEG
-    mov ds, ax
-    mov es, ax
-    mov fs, ax
-    mov gs, ax
-    mov ss, ax
+    mov cx, DATA_SEG
+    mov ds, cx
+    mov es, cx
+    mov fs, cx
+    mov gs, cx
+    mov ss, cx
 
     mov esp, stack_top  ; set up stack before doing anything
+    push ebx;
+    push eax;
     call kernel_main
 
 hang:

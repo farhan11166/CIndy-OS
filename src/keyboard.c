@@ -3,6 +3,8 @@
 #include "../include/ports.h"
 #include "../include/timer.h"
 #include "../include/string.h"
+#include "../include/memory.h"
+
 extern volatile unsigned int timer_ticks;
 const char kbd_us[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',   
@@ -37,7 +39,7 @@ void execute_command(){
     }
     if(argc>0){
         if(strcmp(argv[0],"help")==0){
-             print("Available commands: help, clear, echo, timer, about, version, reboot");
+             print("Available commands: help, clear, echo, timer, about, version, reboot,meminfo");
         }
         else if(strcmp(argv[0],"clear")==0){
             clear_screen();
@@ -69,6 +71,15 @@ void execute_command(){
                     }
                }
             }
+        }
+        else if (strcmp(argv[0], "meminfo") == 0) {
+            print("Total RAM: ");
+            print_int(get_total_memory() / 1024);
+            print(" KB\n");
+            
+            print("Allocated: ");
+            print_int(get_allocated_memory());
+            print(" Bytes\n");
         }
         else{
             print("Unknown command: ");
