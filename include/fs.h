@@ -16,7 +16,7 @@ void init_fs(unsigned int tar_address);
 void tar_ls();
 void tar_cat(const char* filename);
 
-
+unsigned int parse_octal(const char* str,int max_len);
 
 
 

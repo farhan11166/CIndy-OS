@@ -14,7 +14,7 @@ void  init_memory(struct multiboot_info* mbd, unsigned int magic){
     print("\n");
     char* test_ptr = (char*)kmalloc(10);
     print("Test Alloc: ");
-    print_hex(test_ptr);
+    print_hex((unsigned int)test_ptr);
     print("\n");
     if(magic!=MULTIBOOT_MAGIC){
         print("Invalid multiboot magic number \n");

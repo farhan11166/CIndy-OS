@@ -5,6 +5,9 @@
 #include "../include/interrupts.h"
 #include "../include/timer.h"
 #include "../include/keyboard.h"
+#include "../include/multiboot.h"
+#include "../include/fs.h"
+#include "../include/memory.h"
 extern void isr0(); extern void isr1(); extern void isr2(); extern void isr3();
 extern void isr4(); extern void isr5(); extern void isr6(); extern void isr7();
 extern void isr8(); extern void isr9(); extern void isr10(); extern void isr11();
@@ -104,13 +107,24 @@ void kernel_main(unsigned int magic, struct multiboot_info* mbd) {
     idt_set_gate(33, (unsigned int)isr33, 0x08, 0x8E);
     enable_interrupts();
     init_timer(100);
-    init_memory(mbd,magic);
+    
     //int a=1/0;
+    init_memory(mbd,magic);
+    if(mbd->mods_count >0){
+        struct multiboot_mod_list* module=(struct multiboot_mod_list*)mbd->mods_addr;
+        init_fs(module->mod_start);
+    }
+    else{
+        print("Warning: No initrd module loaded by GRUB!\n");
+
+    }
 
     print("Interrupts enabled.\n");
     print_colored("\n[CIndy-OS]> ", 0x0B);
     while(1){
         asm volatile("hlt");
     }
+    
+
     
 }
