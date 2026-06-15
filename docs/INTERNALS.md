@@ -771,6 +771,14 @@ To dynamically allocate memory, the kernel must first know how much physical RAM
 - `kmalloc()` maintains a `free_mem_addr` pointer (starting at `0x200000`, well above the kernel to prevent overwriting code). When `kmalloc(size)` is called, it rounds the size up to the nearest 4-byte boundary (for CPU alignment), returns the current pointer, and "bumps" the pointer forward by the size requested.
 - **Limitation**: A bump allocator cannot free memory. It is purely designed to permanently allocate structures during early OS initialization.
 
+## 18. Initial Ramdisk & File System (Initrd + USTAR)
+
+Instead of writing a complex IDE driver and FAT32 parser from scratch, CIndy-OS uses an **Initial Ramdisk (initrd)** formatted as a **USTAR archive**.
+- We use GRUB's `module` command in `grub.cfg` to load the `initrd.tar` archive directly into physical memory alongside the kernel.
+- During boot, `kernel_main` reads the `mods_count` and `mods_addr` fields from the `multiboot_info` structure to find exactly where in RAM GRUB placed the archive.
+- A TAR file is simply a contiguous block of files. Each file starts with a 512-byte header containing the filename and size (stored as an ASCII octal string).
+- Our `fs.c` parser jumps through memory in 512-byte padded blocks. The `ls` command prints the filenames from the headers, and the `cat` command reads the raw text located immediately after the header block.
+
 ---
 
 *Keep this document updated as CIndy-OS grows. Add a new section each time you touch a new subsystem.*

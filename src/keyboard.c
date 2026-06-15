@@ -1,10 +1,10 @@
 #include "../include/keyboard.h"
 #include "../include/screen.h"
 #include "../include/ports.h"
+#include "../include/memory.h"
+#include "../include/fs.h"
 #include "../include/timer.h"
 #include "../include/string.h"
-#include "../include/memory.h"
-
 extern volatile unsigned int timer_ticks;
 const char kbd_us[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',   
@@ -39,12 +39,12 @@ void execute_command(){
     }
     if(argc>0){
         if(strcmp(argv[0],"help")==0){
-             print("Available commands: help, clear, echo, timer, about, version, reboot,meminfo");
+            print("Available commands: help, clear, echo, timer, about, version, reboot,meminfo,ls,cat");
         }
         else if(strcmp(argv[0],"clear")==0){
             clear_screen();
         }
-         else if (strcmp(argv[0], "timer") == 0) {
+        else if (strcmp(argv[0], "timer") == 0) {
             print_int(timer_ticks / 100);
             print(" seconds");
         } 
@@ -80,6 +80,16 @@ void execute_command(){
             print("Allocated: ");
             print_int(get_allocated_memory());
             print(" Bytes\n");
+        }
+        else if (strcmp(argv[0], "ls") == 0) {
+            tar_ls();
+        }
+        else if (strcmp(argv[0], "cat") == 0) {
+            if (argc == 1) {
+                print("Usage: cat <filename>\n");
+            } else {
+                tar_cat(argv[1]);
+            }
         }
         else{
             print("Unknown command: ");

@@ -12,6 +12,7 @@ When booted, CIndy-OS initializes its own GDT, sets up the IDT, remaps the Progr
 3. **Interactive Shell**: Features a command-line interface with an `argc/argv` parser.
 4. **Built-in Commands**: Try typing `help`, `about`, `version`, `timer`, `echo`, `meminfo`, or `reboot`!
 5. **Memory Management**: Parses the GRUB Multiboot memory map and provides a dynamic bump allocator (`kmalloc`).
+6. **Read-Only File System**: Uses an Initial Ramdisk (initrd) formatted as a USTAR archive to support file reading (`ls`, `cat`).
 
 All output is written directly to the VGA text buffer at physical address `0xB8000`, and input is processed directly from the PS/2 controller port `0x60`.
 
@@ -144,7 +145,7 @@ qemu-system-i386 -cdrom CIndy-os.iso
 - [x] PS/2 keyboard driver
 - [x] Simple shell / command input
 - [x] Memory management (PMM, Paging, kmalloc)
-- [ ] Basic filesystem (read-only FAT or custom)
+- [x] Basic filesystem (read-only FAT or custom)
 
 ---
 
