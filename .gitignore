@@ -1,9 +1,12 @@
 # Build outputs
 *.o
 *.bin
+*.iso
+initrd.tar
 
 # Generated boot image copied into the ISO tree
 iso/boot/kernel.bin
+iso/boot/initrd.tar
 
 # Local emulator/debug leftovers
 *.log
