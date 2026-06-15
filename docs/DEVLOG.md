@@ -378,18 +378,38 @@ Give the kernel the ability to understand and allocate memory.
 
 ---
 
-## Week 8 — 🚧 In Progress
+## Week 8 — ✅ Done
+**Phase:** File System (Initrd & USTAR)
+
+Give the kernel the ability to read files loaded by GRUB.
+
+**Planned:**
+- [x] Configure GRUB to load an `initrd.tar` archive alongside the kernel.
+- [x] Extract `mods_addr` from the Multiboot Information structure.
+- [x] Write a USTAR parser to iterate through 512-byte headers.
+- [x] Implement the `ls` shell command to list archive contents.
+- [x] Implement the `cat` shell command to read raw file data.
+
+**New Files:**
+| File | Purpose |
+|---|---|
+| `src/fs.c` + `include/fs.h` | TAR header definition and USTAR parser logic. |
+| `fs/` directory | Directory packaged into the `initrd.tar` archive during build. |
+
+---
+
+## Week 9 — 🚧 In Progress
 **Phase:** Polish & Portfolio
 
 Make the project presentable and well-documented for a portfolio/GitHub audience.
 
 **Planned:**
-- [ ] Reorganize folder structure: `boot/`, `src/`, `include/`, `docs/`
-- [ ] Add missing headers (`kernel.h`, `vga.h`, `types.h` with `uint8_t` etc.)
-- [ ] Write `LEARNING.md` — one entry per week summarizing what was learned
-- [ ] Update `README.md` with a screenshot or GIF of the OS running
-- [ ] Record a 60-second QEMU demo video
-- [ ] GitHub: add topics (`os-dev`, `x86`, `bare-metal`, `c`, `nasm`), clean description, tidy commit history
+- [x] Add missing standard headers (`types.h` with `uint8_t` etc.)
+- [x] Write `LEARNING.md` — summarizing low-level concepts mastered.
+- [x] Update `README.md` with the new file system feature.
+- [x] Update `INTERNALS.md` with the file system parsing logic.
+- [ ] Record a 60-second QEMU demo video/GIF.
+- [ ] GitHub: clean description, tidy commit history.
 
 ---
 
@@ -404,7 +424,8 @@ Make the project presentable and well-documented for a portfolio/GitHub audience
 | 5 | Shell | ✅ Done |
 | 6 | Better Terminal + Timers | ✅ Done |
 | 7 | Memory Management | ✅ Done |
-| 8 | Polish & Portfolio | 🚧 In Progress |
+| 8 | File System (Initrd) | ✅ Done |
+| 9 | Polish & Portfolio | 🚧 In Progress |
 
 ---
 
