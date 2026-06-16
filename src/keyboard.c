@@ -91,6 +91,23 @@ void execute_command(){
                 tar_cat(argv[1]);
             }
         }
+        else if (strcmp(argv[0], "pwd") == 0) {
+       print("/");
+        }
+       else if (strcmp(argv[0], "whoami") == 0) {
+         print("root");
+        }
+        else if (strcmp(argv[0], "uptime") == 0) {
+        uint32_t seconds = timer_ticks / 100;
+        uint32_t minutes = seconds / 60;
+        uint32_t hours = minutes / 60;
+        print_int(hours);
+        print("h ");
+        print_int(minutes % 60);
+        print("m ");
+        print_int(seconds % 60);
+        print("s");
+        }
         else{
             print("Unknown command: ");
             print(argv[0]);
