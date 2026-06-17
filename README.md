@@ -280,14 +280,9 @@ make run-debug       # Run with debug console output
 - [ ] **Virtual Memory / Paging** — Enable paging for 4 GiB address space and memory protection
 - [ ] **Dynamic Memory Management** — Implement malloc/free with fragmentation handling (heap allocator)
 - [ ] **Process Management** — Context switching, process scheduler, task switching
-- [ ] **Disk I/O** — Read from IDE/SATA drives instead of just initrd
-- [ ] **File System Writes** — Writable filesystem (FAT12/32 or ext2)
+- [ ] **File System Writes** — Writable filesystem (FAT12/32 or ext2
 - [ ] **Preemptive Multitasking** — Multiple processes running concurrently
 - [ ] **System Calls** — User mode vs. kernel mode, syscall interface
-- [ ] **Standard Library** — libc implementation for C programs
-- [ ] **Loadable Executables** — ELF loader to run standalone programs
-- [ ] **Network Stack** — NIC drivers, IP/TCP/UDP (advanced goal)
-- [ ] **Graphics Mode** — Switch from text mode to graphics (VBE/UEFI)
 - [ ] **Debugging Tools** — GDB support, kernel debugger
 
 ### Point of View / Philosophy
