@@ -18,3 +18,20 @@ void outb(unsigned short port, unsigned char data) {
         : "a" (data), "d" (port)
     );
 }
+
+unsigned short inw(unsigned short port) {
+    unsigned short res;
+    __asm__ volatile (
+        "inw %%dx, %%ax"
+        : "=a" (res)
+        : "Nd" (port)
+    );
+    return res;
+}
+void outw(unsigned short port, unsigned short data) {
+    __asm__ volatile (
+        "outw %%ax, %%dx"
+        :
+        : "a" (data), "Nd" (port)
+    );
+}

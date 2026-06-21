@@ -5,6 +5,8 @@
 #include "../include/fs.h"
 #include "../include/timer.h"
 #include "../include/string.h"
+#include "../include/types.h"
+#include "../include/ata.h"   
 extern volatile unsigned int timer_ticks;
 const char kbd_us[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',   
@@ -107,6 +109,37 @@ void execute_command(){
         print("m ");
         print_int(seconds % 60);
         print("s");
+        }
+        else if (strcmp(argv[0], "write-test") == 0) {
+             if (argc < 2) {
+                print("Usage: write_test <text>\n");
+            } else {
+                unsigned char buffer[512] = {0};
+                
+                // Copy all arguments into our buffer separated by spaces
+                int buf_idx = 0;
+                for (int a = 1; a < argc; a++) {
+                    int c = 0;
+                    while (argv[a][c] != '\0' && buf_idx < 510) {
+                        buffer[buf_idx++] = argv[a][c++];
+                    }
+                    if (a < argc - 1 && buf_idx < 510) {
+                        buffer[buf_idx++] = ' '; // Add space between words
+                    }
+                }
+                buffer[buf_idx] = '\0'; // ensure it's null-terminated
+                
+                ata_write_sector(1, buffer);
+                print("Successfully wrote to Sector 1!\n");
+            }
+           
+        }
+        else if (strcmp(argv[0], "read-test") == 0) {
+            unsigned char buffer[512] = {0};
+            ata_read_sector(1, buffer);
+            print("Read from Sector 1: ");
+            print((char*)buffer);
+            print("\n");
         }
         else{
             print("Unknown command: ");
