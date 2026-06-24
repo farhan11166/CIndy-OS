@@ -13,6 +13,8 @@ When booted, CIndy-OS initializes its own GDT, sets up the IDT, remaps the Progr
 4. **Built-in Commands**: Try typing `help`, `about`, `version`, `timer`, `echo`, `meminfo`, or `reboot`!
 5. **Memory Management**: Parses the GRUB Multiboot memory map and provides a dynamic bump allocator (`kmalloc`).
 6. **Read-Only File System**: Uses an Initial Ramdisk (initrd) formatted as a USTAR archive to support file reading (`ls`, `cat`).
+7. **ATA PIO Hard Drive Driver**: Implemented 28-bit LBA sector reading and writing to a virtual IDE hard drive.
+
 
 All output is written directly to the VGA text buffer at physical address `0xB8000`, and input is processed directly from the PS/2 controller port `0x60`.
 
@@ -36,7 +38,8 @@ CIndy-OS/
 │   ├── keyboard.c            # PS/2 keyboard driver + input parsing
 │   ├── memory.c              # Memory management: bump allocator (kmalloc)
 │   ├── fs.c                  # USTAR archive filesystem driver (ls, cat)
-│   └── string.c              # String utility functions
+│   ├── string.c              # String utility functions
+│   └── ata.c                 # ATA PIO disk driver
 ├── include/                  # Header files
 │   ├── types.h               # Type definitions (uint8_t, uint32_t, etc.)
 │   ├── screen.h              # Screen interface
@@ -49,6 +52,7 @@ CIndy-OS/
 │   ├── memory.h              # Memory management interface
 │   ├── fs.h                  # Filesystem interface
 │   ├── string.h              # String utilities
+│   ├── ata.h                 # ATA interface
 │   └── multiboot.h           # Multiboot info structure
 ├── iso/                      # ISO boot configuration
 │   └── boot/
@@ -155,7 +159,7 @@ cli + hlt loop (halts CPU)
 
 #### `src/keyboard.c` — PS/2 Keyboard Driver
 - `handle_keyboard_interrupt(unsigned char scancode)` — Converts PS/2 scancodes to ASCII
-  - Handles shift key, special keys (Enter, Backspace)
+  - Handles shift key, caps lock, and special keys (Enter, Backspace)
   - Buffers input for command parsing
 - `parse_command(const char* cmd)` — Parses shell commands with `argc`/`argv`
 - **Built-in Commands**:
@@ -168,6 +172,8 @@ cli + hlt loop (halts CPU)
   - `reboot` — Reboots system
   - `ls` — Lists files in initrd
   - `cat <file>` — Reads and displays file contents
+  - `write-test <text>` — Writes text to Sector 1 of the hard drive
+  - `read-test` — Reads and displays Sector 1 from the hard drive
 
 #### `src/memory.c` — Memory Management
 - `init_memory(struct multiboot_info* mbd, unsigned int magic)` — Parses Multiboot memory map
@@ -177,6 +183,11 @@ cli + hlt loop (halts CPU)
   - Allocates contiguous memory from "kernel heap"
   - Simple: just increments a pointer (no free/fragmentation)
   - Suitable for bootloader and static kernel structures
+
+#### `src/ata.c` — ATA PIO Hard Drive Driver
+- `ata_wait_ready()` — Polls the disk controller status register until BSY and DRQ bits are clear
+- `ata_read_sector(unsigned int lba, unsigned char* buffer)` — Sends `0x20` command to read 512 bytes from LBA
+- `ata_write_sector(unsigned int lba, unsigned char* buffer)` — Sends `0x30` command and writes 512 bytes, followed by cache flush (`0xE7`)
 
 #### `src/fs.c` — USTAR TAR Archive Filesystem
 - `init_fs(unsigned int initrd_address)` — Parses USTAR tar archive from initrd

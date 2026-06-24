@@ -26,7 +26,10 @@ Without `<stdio.h>` or `<string.h>`, I wrote my own PS/2 keyboard driver. It lis
 I learned how the OS discovers physical RAM. By parsing the GRUB Multiboot Information structure, I extracted the memory map to find usable RAM regions. Since writing a full `malloc()` is incredibly complex, I implemented a fast **Bump Allocator** (`kmalloc`) that aligns memory to 4-byte boundaries and securely manages pointer bumps above the kernel block.
 
 ## 7. Initial Ramdisks and File Systems
-Writing a hard drive SATA driver is beyond the scope of a hobby OS, so I learned how Linux bootstraps filesystems using an `initrd`. I configured GRUB to load a `TAR` archive into physical memory, and wrote a USTAR parser in C to jump through memory in 512-byte blocks. This allowed my OS to support real file reading (`ls`, `cat`) without any hard drive drivers!
+To bootstrap a filesystem, I learned how Linux uses an `initrd`. I configured GRUB to load a `TAR` archive into physical memory, and wrote a USTAR parser in C to jump through memory in 512-byte blocks. This allowed my OS to support real file reading (`ls`, `cat`) immediately upon boot.
+
+## 8. ATA PIO Hard Drive Driver
+I eventually went beyond the RAM disk and implemented a true ATA PIO hard drive driver! I learned how to communicate with the primary IDE bus using 16-bit port I/O (`inw`, `outw`). I implemented 28-bit LBA (Logical Block Addressing) to target specific sectors, and mastered polling hardware status registers (checking the `BSY` and `DRQ` bits) to synchronize the CPU with the physical disk controller for raw sector read/write operations.
 
 ---
 
