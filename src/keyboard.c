@@ -201,7 +201,7 @@ void handle_keyboard_interrupt(unsigned char scancode) {
             if (caps) ascii -= 32; // a -> A
         }
         else if (ascii >= 'A' && ascii <= 'Z') {
-            if (caps && !shift_pressed) ascii += 32; // A -> a
+            if(caps) ascii +=32;
         }
 
         if (buffer_index < BUFFER_SIZE - 1) {
