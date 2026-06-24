@@ -8,11 +8,20 @@
 #include "../include/types.h"
 #include "../include/ata.h"   
 extern volatile unsigned int timer_ticks;
+uint8_t shift_pressed = 0;
+uint8_t caps = 0;
+
 const char kbd_us[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',   
   '\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\n',   
     0,  'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '`',   0,   
   '\\', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/',   0, '*',   0, ' '
+};
+const char kbd_us_shift[128] = {
+    0,  27, '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', '\b',
+  '\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '\n',
+    0,  'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '~',   0,
+  '|', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?',   0, '*',   0, ' '
 };
 #define BUFFER_SIZE 256
 char
@@ -155,31 +164,52 @@ void execute_command(){
     }
 }
 
-void handle_keyboard_interrupt(unsigned char scancode){
-    if (scancode & 0x80) {
+void handle_keyboard_interrupt(unsigned char scancode) {
+    switch(scancode) {
+        case 0x2A: // Left Shift pressed
+        case 0x36: // Right Shift pressed
+            shift_pressed = 1;
+            return;
+        case 0xAA: // Left Shift released
+        case 0xB6: // Right Shift released
+            shift_pressed = 0;
+            return;
+        case 0x3A: // Caps Lock
+            caps = (caps + 1) % 2;
+            return;
+    }
+
+    if (scancode & 0x80) { // ignore other release events
         return;
     }
-    char ascii=kbd_us[scancode];
-    if(ascii=='\b'){
-        if(buffer_index>0){
+    
+    char ascii = shift_pressed ? kbd_us_shift[scancode] : kbd_us[scancode];
+    
+    if (ascii == '\b') {
+        if (buffer_index > 0) {
             buffer_index--;
-            input_buffer[buffer_index]='\0';
+            input_buffer[buffer_index] = '\0';
             print("\b \b");
-            
-        }}
-        else if(ascii=='\n'){
-            input_buffer[buffer_index]='\0';
-            execute_command();
         }
-        else if(ascii!=0){
-            if(buffer_index<BUFFER_SIZE-1){
-                input_buffer[buffer_index]=ascii;
-
-                char str[2]={ascii,'\0'};
-                print(str);
-                buffer_index++;
-            }
-        }
-        
     }
+    else if (ascii == '\n') {
+        input_buffer[buffer_index] = '\0';
+        execute_command();
+    }
+    else if (ascii != 0) {
+        if (ascii >= 'a' && ascii <= 'z') {
+            if (caps) ascii -= 32; // a -> A
+        }
+        else if (ascii >= 'A' && ascii <= 'Z') {
+            if (caps && !shift_pressed) ascii += 32; // A -> a
+        }
+
+        if (buffer_index < BUFFER_SIZE - 1) {
+            input_buffer[buffer_index] = ascii;
+            char str[2] = {ascii, '\0'};
+            print(str);
+            buffer_index++;
+        }
+    }
+}
 
