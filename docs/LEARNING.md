@@ -31,6 +31,12 @@ To bootstrap a filesystem, I learned how Linux uses an `initrd`. I configured GR
 ## 8. ATA PIO Hard Drive Driver
 I eventually went beyond the RAM disk and implemented a true ATA PIO hard drive driver! I learned how to communicate with the primary IDE bus using 16-bit port I/O (`inw`, `outw`). I implemented 28-bit LBA (Logical Block Addressing) to target specific sectors, and mastered polling hardware status registers (checking the `BSY` and `DRQ` bits) to synchronize the CPU with the physical disk controller for raw sector read/write operations.
 
+## 9. FAT16 File System and Struct Mapping
+I expanded on the ATA driver by formatting the disk with a FAT16 filesystem. I learned how to read the FAT16 Boot Sector (BIOS Parameter Block) and how to perfectly map C structures over raw memory buffers using `__attribute__((packed))`. By casting a `uint8_t` array pointer to a struct pointer, I realized that C doesn't copy data, but simply places a "stencil" over memory to read variables exactly as they are laid out on the disk.
+
+## 10. Hardware State & BIOS Handoff
+I discovered a fascinating bug regarding hardware state persisting from the boot process. When booting from a CD-ROM in QEMU, the BIOS leaves the CD-ROM as the "selected" IDE drive. Polling for the hard drive's "Ready" status (`0x40`) before explicitly switching the IDE controller to the hard drive resulted in an infinite hang, because CD-ROMs respond differently to status checks.
+
 ---
 
 *This project demystified the "magic" of operating systems. I now have a deep, practical understanding of pointers, memory management, and hardware interaction.*

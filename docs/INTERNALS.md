@@ -779,6 +779,38 @@ Instead of writing a complex IDE driver and FAT32 parser from scratch, CIndy-OS 
 - A TAR file is simply a contiguous block of files. Each file starts with a 512-byte header containing the filename and size (stored as an ASCII octal string).
 - Our `fs.c` parser jumps through memory in 512-byte padded blocks. The `ls` command prints the filenames from the headers, and the `cat` command reads the raw text located immediately after the header block.
 
+## 19. FAT16 File System & Memory Casting
+
+We implemented a FAT16 parser on top of the ATA driver. The FAT16 Boot Sector (BIOS Parameter Block or BPB) is located at LBA 0. 
+
+### The `__attribute__((packed))` Stencil
+To read the BPB, we use a 512-byte `uint8_t buffer`. Instead of parsing byte-by-byte, we define a C struct that mirrors the exact layout of the BPB on disk. We use `__attribute__((packed))` to prevent GCC from adding any padding bytes.
+```c
+fat16_bpb_t* bpb = (fat16_bpb_t*) buffer;
+```
+When this cast happens, C does not copy or convert any data. It simply places a "stencil" over the raw buffer. When we access `bpb->bytes_per_sector`, the compiler automatically fetches the correct bytes from the buffer at offset 11.
+
+### Root Directory Calculation
+Once the BPB is loaded, the starting sector of the Root Directory is calculated as:
+```c
+uint32_t root_dir_sector = bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);
+```
+
+## 20. IDE Drive Selection & BIOS Hardware State
+
+When developing an OS, it is crucial to understand that **the BIOS leaves hardware in whatever state it used last**. 
+
+When communicating with the IDE Controller (ATA PIO mode):
+- **Port `0x1F6`**: Drive / Head selection register.
+- **Port `0x1F7`**: Status (when read) / Command (when written) register.
+
+A common bug involves polling the status port (`0x1F7`) to wait for the `BSY` (Busy) bit to clear and the `RDY` (Ready) bit to set *before* selecting the drive on port `0x1F6`. 
+
+If the OS boots from the Hard Drive (Drive 0), this usually works because the BIOS selected Drive 0 to load the bootloader, so the controller is already pointing to it. 
+However, if the OS boots from a **CD-ROM** (e.g., QEMU `-boot d`), the BIOS leaves the CD-ROM selected. Since a CD-ROM is an ATAPI device, its status register behaves differently. Polling it for the standard ATA `RDY` bit will cause an infinite loop (a silent kernel hang).
+
+**The Rule:** Always explicitly send the drive selection command to `0x1F6` *before* reading the status port `0x1F7` to ensure you are polling the correct device.
+
 ---
 
 *Keep this document updated as CIndy-OS grows. Add a new section each time you touch a new subsystem.*

@@ -15,8 +15,9 @@ all:
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/memory.c -o memory.o
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/fs.c -o fs.o
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/ata.c -o ata.o
+	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/fat16.c -o fat16.o
 
-	ld -m elf_i386 -T linker.ld -o kernel.bin boot.o kernel.o screen.o ports.o idt.o pic.o isr.o idt_load.o interrupts.o keyboard.o timer.o string.o memory.o fs.o ata.o
+	ld -m elf_i386 -T linker.ld -o kernel.bin boot.o kernel.o screen.o ports.o idt.o pic.o isr.o idt_load.o interrupts.o keyboard.o timer.o string.o memory.o fs.o ata.o fat16.o
 
 	cp kernel.bin iso/boot/kernel.bin
 	cd fs && tar -cvf ../initrd.tar *
@@ -29,7 +30,7 @@ all:
 	grub-mkrescue -o CIndy-os.iso iso
 
 run:
-	qemu-system-i386 -cdrom CIndy-os.iso -drive file=disk.img,format=raw,index=0,media=disk
+	qemu-system-i386 -boot d -cdrom CIndy-os.iso -drive file=disk.img,format=raw,index=0,media=disk
 
 run-curses:
 	qemu-system-i386 -display curses -cdrom CIndy-os.iso -drive file=disk.img,format=raw,index=0,media=disk

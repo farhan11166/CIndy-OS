@@ -6,7 +6,8 @@
 #include "../include/timer.h"
 #include "../include/string.h"
 #include "../include/types.h"
-#include "../include/ata.h"   
+#include "../include/ata.h"
+#include "../include/fat16.h"   
 extern volatile unsigned int timer_ticks;
 uint8_t shift_pressed = 0;
 uint8_t caps = 0;

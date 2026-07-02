@@ -13,12 +13,12 @@ void ata_wait_ready(){
 
 }
 void ata_read_sector(unsigned int lba, unsigned char* buffer){
+    outb(0x1F6, 0xE0 | ((lba >> 24) & 0x0F)); // bits 24-27
     ata_wait_ready();
       outb(0x1F2, 1);
     outb(0x1F3, (uint8_t)(lba));        // bits 0-7
  outb(0x1F4, (uint8_t)(lba >> 8));   // bits 8-15
  outb(0x1F5, (uint8_t)(lba >> 16));  // bits 16-23
-  outb(0x1F6, 0xE0 | ((lba >> 24) & 0x0F)); // bits 24-27
 
   outb(0x1F7,0X20);
   inb(0x3F6);
@@ -35,12 +35,12 @@ void ata_read_sector(unsigned int lba, unsigned char* buffer){
 
 }
 void ata_write_sector(unsigned int lba, unsigned char* buffer){
+    outb(0x1F6, 0xE0 | ((lba >> 24) & 0x0F)); // bits 24-27
     ata_wait_ready();
       outb(0x1F2, 1);
     outb(0x1F3, (uint8_t)(lba));        // bits 0-7
  outb(0x1F4, (uint8_t)(lba >> 8));   // bits 8-15
  outb(0x1F5, (uint8_t)(lba >> 16));  // bits 16-23
-  outb(0x1F6, 0xE0 | ((lba >> 24) & 0x0F)); // bits 24-27
 
   outb(0x1F7,0X30);
   inb(0x3F6);

@@ -8,6 +8,7 @@
 #include "../include/multiboot.h"
 #include "../include/fs.h"
 #include "../include/memory.h"
+#include "../include/fat16.h"
 extern void isr0(); extern void isr1(); extern void isr2(); extern void isr3();
 extern void isr4(); extern void isr5(); extern void isr6(); extern void isr7();
 extern void isr8(); extern void isr9(); extern void isr10(); extern void isr11();
@@ -118,9 +119,11 @@ void kernel_main(unsigned int magic, struct multiboot_info* mbd) {
         print("Warning: No initrd module loaded by GRUB!\n");
 
     }
+    fat16_init();
 
     print("Interrupts enabled.\n");
     print_colored("\n[CIndy-OS]> ", 0x0B);
+    
     while(1){
         asm volatile("hlt");
     }
