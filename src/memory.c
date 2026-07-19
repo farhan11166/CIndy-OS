@@ -55,6 +55,20 @@ void* kmalloc(unsigned int size){
     allocated_memory+=size;
     return ptr;
 }
+void* kmalloc_a(unsigned int size) {
+    // Check if free_mem_addr is NOT aligned to 4096 (0x1000)
+    // 0xFFF is 4095. If the bottom 12 bits are not 0, it's not aligned!
+    if (free_mem_addr & 0xFFF) {
+        free_mem_addr &= 0xFFFFF000; // Clear the bottom 12 bits
+        free_mem_addr += 0x1000;     // Bump it up to the next 4KB boundary
+    }
+    
+    void* ptr = (void*)free_mem_addr;
+    free_mem_addr += size;
+    allocated_memory += size;
+    
+    return ptr;
+}
 
 unsigned get_total_memory(){return total_memory;}
 unsigned get_allocated_memory(){return allocated_memory;}

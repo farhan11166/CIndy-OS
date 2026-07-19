@@ -9,6 +9,7 @@
 #include "../include/fs.h"
 #include "../include/memory.h"
 #include "../include/fat16.h"
+#include "../include/paging.h"
 extern void isr0(); extern void isr1(); extern void isr2(); extern void isr3();
 extern void isr4(); extern void isr5(); extern void isr6(); extern void isr7();
 extern void isr8(); extern void isr9(); extern void isr10(); extern void isr11();
@@ -111,6 +112,7 @@ void kernel_main(unsigned int magic, struct multiboot_info* mbd) {
     
     //int a=1/0;
     init_memory(mbd,magic);
+    init_paging();
     if(mbd->mods_count >0){
         struct multiboot_mod_list* module=(struct multiboot_mod_list*)mbd->mods_addr;
         init_fs(module->mod_start);
