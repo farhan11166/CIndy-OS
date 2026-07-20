@@ -32,11 +32,15 @@ To bootstrap a filesystem, I learned how Linux uses an `initrd`. I configured GR
 I eventually went beyond the RAM disk and implemented a true ATA PIO hard drive driver! I learned how to communicate with the primary IDE bus using 16-bit port I/O (`inw`, `outw`). I implemented 28-bit LBA (Logical Block Addressing) to target specific sectors, and mastered polling hardware status registers (checking the `BSY` and `DRQ` bits) to synchronize the CPU with the physical disk controller for raw sector read/write operations.
 
 ## 9. FAT16 File System and Struct Mapping
-I expanded on the ATA driver by formatting the disk with a FAT16 filesystem. I learned how to read the FAT16 Boot Sector (BIOS Parameter Block) and how to perfectly map C structures over raw memory buffers using `__attribute__((packed))`. By casting a `uint8_t` array pointer to a struct pointer, I realized that C doesn't copy data, but simply places a "stencil" over memory to read variables exactly as they are laid out on the disk.
+I expanded on the ATA driver by formatting the disk with a FAT16 filesystem. I learned how to read the FAT16 Boot Sector (BIOS Parameter Block) and how to perfectly map C structures over raw memory buffers using `__attribute__((packed))`. By casting a `uint8_t` array pointer to a struct pointer, I realized that C doesn't copy data, but simply places a "stencil" over memory to read variables exactly as they are laid out on the disk. I also learned the FAT16 **8.3 filename format**: names are exactly 8 bytes and extensions exactly 3 bytes, stored space-padded (not null-terminated). Listing files requires scanning the root directory sector-by-sector, checking special sentinel values in the first byte of each 32-byte entry to detect end-of-directory (`0x00`), deleted entries (`0xE5`), and LFN entries (`0x0F`).
 
 ## 10. Hardware State & BIOS Handoff
 I discovered a fascinating bug regarding hardware state persisting from the boot process. When booting from a CD-ROM in QEMU, the BIOS leaves the CD-ROM as the "selected" IDE drive. Polling for the hard drive's "Ready" status (`0x40`) before explicitly switching the IDE controller to the hard drive resulted in an infinite hang, because CD-ROMs respond differently to status checks.
 
+## 11. Virtual Memory & Paging
+Paging was the most complex but most rewarding concept I implemented. I built and enabled the x86 MMU from scratch. I learned that every memory access the CPU makes passes through a two-level table — a Page Directory pointing to Page Tables, each entry mapping a 4 KB "page" of virtual memory to a physical address. I built an **identity map** for the first 4 MB, loaded my Page Directory into register `CR3`, and flipped bit 31 of `CR0` to activate the MMU. I proved it worked by deliberately triggering a **Page Fault (Exception 14)** which my ISR correctly caught. Paging is the foundational layer that makes memory protection, user mode, and multi-processing possible.
+
 ---
 
 *This project demystified the "magic" of operating systems. I now have a deep, practical understanding of pointers, memory management, and hardware interaction.*
+

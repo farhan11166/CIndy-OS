@@ -413,19 +413,75 @@ Make the project presentable and well-documented for a portfolio/GitHub audience
 
 ---
 
+## Week 10 — ✅ Done
+**Phase:** ATA PIO Hard Drive Driver
+
+Built a bare-metal disk driver that reads and writes 512-byte sectors directly over the ATA PIO bus.
+
+**What I Built:**
+- Added `inw` and `outw` (16-bit port I/O) to `ports.c` and `ports.h`.
+- Created `src/ata.c` and `include/ata.h` implementing:
+  - `ata_wait_ready()` — polls the alternate status register (`0x3F6`) to wait for BSY to clear.
+  - `ata_read_sector(lba, buf)` — sends LBA28 command `0x20`, reads 256 words via `inw(0x1F0)`.
+  - `ata_write_sector(lba, buf)` — sends command `0x30`, writes 256 words, then flushes cache with `0xE7`.
+- Added `write-test` and `read-test` shell commands to verify persistence.
+- Updated `Makefile` to compile `ata.c` and added `disk.img` to QEMU's `-drive` flag.
+- Added Shift key and Caps Lock support to `keyboard.c` via a second lookup table `kbd_us_shift`.
+
+**New Files:** `src/ata.c`, `include/ata.h`
+
+---
+
+## Week 11 — ✅ Done
+**Phase:** Virtual Memory (Paging)
+
+Enabled the x86 MMU (Memory Management Unit) to translate virtual addresses into physical ones.
+
+**What I Built:**
+- Added `kmalloc_a()` to `memory.c` — a page-aligned allocator that bumps `free_mem_addr` to the next 4 KB boundary before allocating.
+- Created `src/paging.c` and `include/paging.h` implementing `init_paging()`:
+  - Allocates a 1024-entry Page Directory and a 1024-entry Page Table using `kmalloc_a`.
+  - Identity-maps the first 4 MB of RAM: `page_table[i] = (i * 0x1000) | 3`.
+  - Loads `page_direc` into `CR3` and sets bit 31 of `CR0` to enable paging.
+- Verified with an intentional Page Fault at `0xA0000000` — Exception 14 was correctly caught by our ISR.
+
+**New Files:** `src/paging.c`, `include/paging.h`
+
+---
+
+## Week 12 — 🚧 In Progress
+**Phase:** FAT16 Filesystem Driver
+
+Building a real read/write filesystem parser on top of the ATA driver.
+
+**What I Built So Far:**
+- Created `src/fat16.c` and `include/fat16.h` with:
+  - `fat16_bpb_t` — a packed struct mirroring the FAT16 Boot Sector / BIOS Parameter Block.
+  - `fat16_dir_entry_t` — a packed 32-byte struct for root directory entries.
+  - `fat16_init()` — reads Sector 0, parses and prints BPB info (bytes/sector, FS type), calculates the root directory start sector, and lists all files using the 8.3 filename format.
+- Formatted `disk.img` with `mkfs.fat -F 16` and verified file listing works.
+
+**Planned Next:**
+- `fat16_cat(filename)` — read and print file contents using the FAT chain.
+- Shell commands `fat-ls` and `fat-cat` to expose the driver interactively.
+
+**New Files:** `src/fat16.c`, `include/fat16.h`
+
 ## 📊 Progress Tracker
 
 | Week | Phase | Status |
 |---|---|---|
 | 1 | Terminal Foundation | ✅ Done |
 | 2 | Debug Utilities + IDT + PIC + First Keyboard IRQ | ✅ Done |
-| 3 | Real Keyboard Input | 🚧 In Progress |
+| 3 | Real Keyboard Input | ✅ Done |
 | 4 | Shell Prep + Cleaner Input | ✅ Done |
 | 5 | Shell | ✅ Done |
 | 6 | Better Terminal + Timers | ✅ Done |
 | 7 | Memory Management | ✅ Done |
 | 8 | File System (Initrd) | ✅ Done |
-| 9 | Polish & Portfolio | 🚧 In Progress |
+| 9 | ATA PIO Hard Drive Driver | ✅ Done |
+| 10 | Virtual Memory (Paging) | ✅ Done |
+| 11 | FAT16 Filesystem Driver | 🚧 In Progress |
 
 ---
 

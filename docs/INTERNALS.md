@@ -781,7 +781,7 @@ Instead of writing a complex IDE driver and FAT32 parser from scratch, CIndy-OS 
 
 ## 19. FAT16 File System & Memory Casting
 
-We implemented a FAT16 parser on top of the ATA driver. The FAT16 Boot Sector (BIOS Parameter Block or BPB) is located at LBA 0. 
+We implemented a FAT16 parser on top of the ATA driver. The FAT16 Boot Sector (BIOS Parameter Block or BPB) is located at LBA 0.
 
 ### The `__attribute__((packed))` Stencil
 To read the BPB, we use a 512-byte `uint8_t buffer`. Instead of parsing byte-by-byte, we define a C struct that mirrors the exact layout of the BPB on disk. We use `__attribute__((packed))` to prevent GCC from adding any padding bytes.
@@ -790,11 +790,50 @@ fat16_bpb_t* bpb = (fat16_bpb_t*) buffer;
 ```
 When this cast happens, C does not copy or convert any data. It simply places a "stencil" over the raw buffer. When we access `bpb->bytes_per_sector`, the compiler automatically fetches the correct bytes from the buffer at offset 11.
 
-### Root Directory Calculation
+### Root Directory Layout
 Once the BPB is loaded, the starting sector of the Root Directory is calculated as:
 ```c
-uint32_t root_dir_sector = bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);
+uint32_t root_dir_start = bpb->reserved_sectors + (bpb->fat_count * bpb->sectors_per_fat);
 ```
+The root directory spans multiple sectors. The number of sectors it occupies is:
+```c
+uint32_t root_dir_sectors = (bpb->root_dir_entries * 32) / bpb->bytes_per_sector;
+```
+For a standard FAT16 format, `root_dir_entries` is 512 and each entry is 32 bytes, so the root directory always occupies exactly 32 sectors.
+
+### How Filenames Are Read and Stored
+
+FAT16 uses the classic **8.3 format** — exactly 8 bytes for the name, exactly 3 bytes for the extension, stored **space-padded** (not null-terminated). The 32-byte directory entry struct looks like:
+
+```c
+struct fat16_dir_entry {
+    uint8_t filename[8];     // space-padded, NOT null-terminated
+    uint8_t ex[3];           // extension, space-padded
+    uint8_t attributes;      // 0x10 = directory, 0x0F = LFN entry
+    // ... more fields ...
+    uint32_t file_size;
+};
+```
+
+To list files, we loop through each 512-byte sector of the root directory. Each sector contains 16 directory entries (`512 / 32 = 16`). For each entry we check the **first byte of the filename**:
+
+| First byte | Meaning |
+|---|---|
+| `0x00` | End of directory — no more entries follow |
+| `0xE5` | Entry was deleted — skip it |
+| `0x0F` | Long File Name (LFN) entry — skip it |
+| Any other value | Valid filename — print it! |
+
+Since `filename[8]` is space-padded and not null-terminated, we copy it into a 9-byte buffer and add `'\0'` ourselves before calling `print()`:
+
+```c
+char name[9];
+for (int i = 0; i < 8; i++) name[i] = entries[e].filename[i];
+name[8] = '\0';  // we add the null terminator ourselves
+print(name);
+```
+
+This is why a file named `TEST.TXT` on disk appears in your OS as `TEST    .TXT` — the 8-byte field is padded with spaces.
 
 ## 20. IDE Drive Selection & BIOS Hardware State
 
@@ -810,6 +849,69 @@ If the OS boots from the Hard Drive (Drive 0), this usually works because the BI
 However, if the OS boots from a **CD-ROM** (e.g., QEMU `-boot d`), the BIOS leaves the CD-ROM selected. Since a CD-ROM is an ATAPI device, its status register behaves differently. Polling it for the standard ATA `RDY` bit will cause an infinite loop (a silent kernel hang).
 
 **The Rule:** Always explicitly send the drive selection command to `0x1F6` *before* reading the status port `0x1F7` to ensure you are polling the correct device.
+
+---
+
+## 21. Virtual Memory & Paging
+
+Paging is the mechanism that transforms "physical" RAM addresses into "virtual" addresses. Once enabled, every memory access the CPU makes is automatically translated through a two-level lookup table before hitting physical RAM.
+
+### Why Paging?
+- **Memory Protection**: Code running in user mode cannot read or write kernel memory, because those physical pages are simply not mapped into user virtual space.
+- **Isolation**: Two processes can both "think" they own address `0x1000`, but their page tables map that virtual address to completely different physical locations.
+- **Foundation for User Mode**: You cannot safely run user programs (Ring 3) without paging.
+
+### The Two-Level Structure
+
+```
+Virtual Address (32-bit)
+ ┌──────────┬──────────┬────────────┐
+ │  Dir idx │Table idx │   Offset   │
+ │  10 bits │ 10 bits  │  12 bits   │
+ └──────────┴──────────┴────────────┘
+      │           │           │
+      ▼           ▼           │
+ Page Directory  Page Table   │
+ (1024 entries) (1024 entries)│
+      │           │           │
+      └───────────┴───────────┘
+                  │
+                  ▼
+         Physical Address
+```
+
+- **Page Directory**: An array of 1024 `uint32_t`s. Each entry points to a Page Table.
+- **Page Table**: An array of 1024 `uint32_t`s. Each entry points to a 4 KB physical page.
+- **One Page Table** covers `1024 × 4096 = 4 MB` of memory.
+
+### Page Entry Flags
+Each 32-bit entry in a Page Table stores both the physical address and control flags in the low bits:
+- **Bit 0 (Present)**: `1` = this page exists and is valid.
+- **Bit 1 (Read/Write)**: `1` = the page can be written to.
+- Combined: `| 3` sets both bits → Present + Writable.
+
+### Identity Mapping (What CIndy-OS Does)
+Identity mapping means virtual address `0x1000` maps to physical address `0x1000`. Every virtual address equals the physical address:
+```c
+first_page_table[i] = (i * 0x1000) | 3;  // identity map 4 KB page i
+```
+This is done for the first 4 MB (all 1024 entries) so the kernel doesn't crash when paging is first enabled — because kernel code is already loaded in that physical range.
+
+### Enabling Paging (CR3 and CR0)
+```c
+// 1. Load the address of the Page Directory into CR3
+asm volatile("mov %0, %%cr3":: "r"(page_direc));
+
+// 2. Read CR0, set bit 31 (the Paging Enable bit), write it back
+uint32_t cr0;
+asm volatile("mov %%cr0, %0": "=r"(cr0));
+cr0 |= 0x80000000;
+asm volatile("mov %0, %%cr0":: "r"(cr0));
+```
+The moment `CR0` is written with bit 31 set, the MMU activates. Every single memory access from that point forward is translated through the page tables.
+
+### Proving It Works — Page Faults
+Accessing an address outside of the mapped 4 MB (e.g. `0xA0000000`) with paging enabled triggers **Exception 14 (Page Fault)**. Our ISR catches it, preventing the kernel from blindly corrupting memory and instead printing an error. This is the hardware-enforced memory protection at work.
 
 ---
 
