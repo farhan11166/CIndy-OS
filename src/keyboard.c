@@ -51,7 +51,15 @@ void execute_command(){
     }
     if(argc>0){
         if(strcmp(argv[0],"help")==0){
-            print("Available commands: help, clear, echo, timer, about, version, reboot,meminfo,ls,cat");
+            print("Available commands:\n");
+            print("  help, clear, echo, timer, about, version, reboot\n");
+            print("  meminfo, uptime, pwd, whoami\n");
+            print("  ls, cat                  (initrd/tar filesystem)\n");
+            print("  fat-ls                   (list FAT16 disk files)\n");
+            print("  fat-cat  <file.ext>      (read  FAT16 file)\n");
+            print("  fat-write <file.ext> <text>  (write FAT16 file)\n");
+            print("  read-test, write-test    (raw ATA sector test)\n");
+
         }
         else if(strcmp(argv[0],"clear")==0){
             clear_screen();
@@ -150,6 +158,46 @@ void execute_command(){
             print("Read from Sector 1: ");
             print((char*)buffer);
             print("\n");
+        }
+        else if (strcmp(argv[0], "fat-ls") == 0) {
+            fat16_ls();
+        }
+        else if (strcmp(argv[0], "fat-cat") == 0) {
+            if (argc < 2) {
+                print("Usage: fat-cat <filename.ext>\n");
+            } else {
+                char name8[9], ext3[4];
+                fat16_format_83(argv[1], name8, ext3);
+                uint8_t buf[4096];
+                int bytes = fat16_read_file(name8, ext3, buf);
+                if (bytes > 0) {
+                    buf[bytes] = '\0';
+                    print((char*)buf);
+                    print("\n");
+                }
+            }
+        }
+        else if (strcmp(argv[0], "fat-write") == 0) {
+            if (argc < 3) {
+                print("Usage: fat-write <filename.ext> <text>\n");
+            } else {
+                char name8[9], ext3[4];
+                fat16_format_83(argv[1], name8, ext3);
+
+                // Combine all remaining args as the file content
+                char content[256];
+                int idx = 0;
+                for (int a = 2; a < argc && idx < 254; a++) {
+                    int c = 0;
+                    while (argv[a][c] != '\0' && idx < 254)
+                        content[idx++] = argv[a][c++];
+                    if (a < argc - 1 && idx < 254)
+                        content[idx++] = ' ';
+                }
+                content[idx] = '\0';
+
+                fat16_write_file(name8, ext3, (const uint8_t*)content, idx);
+            }
         }
         else{
             print("Unknown command: ");

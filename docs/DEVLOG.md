@@ -449,21 +449,26 @@ Enabled the x86 MMU (Memory Management Unit) to translate virtual addresses into
 
 ---
 
-## Week 12 — 🚧 In Progress
+## Week 12 — ✅ Done
 **Phase:** FAT16 Filesystem Driver
 
 Building a real read/write filesystem parser on top of the ATA driver.
 
-**What I Built So Far:**
-- Created `src/fat16.c` and `include/fat16.h` with:
+**What I Built:**
+- Created `src/fat16.c` and `include/fat16.h` handling the complete FAT16 implementation:
   - `fat16_bpb_t` — a packed struct mirroring the FAT16 Boot Sector / BIOS Parameter Block.
   - `fat16_dir_entry_t` — a packed 32-byte struct for root directory entries.
-  - `fat16_init()` — reads Sector 0, parses and prints BPB info (bytes/sector, FS type), calculates the root directory start sector, and lists all files using the 8.3 filename format.
-- Formatted `disk.img` with `mkfs.fat -F 16` and verified file listing works.
-
-**Planned Next:**
-- `fat16_cat(filename)` — read and print file contents using the FAT chain.
-- Shell commands `fat-ls` and `fat-cat` to expose the driver interactively.
+  - Implemented core calculations: FAT offset, cluster-to-LBA, and traversing the FAT linked list.
+- Implemented full **File Write** support:
+  - `fat16_find_free_cluster` to allocate empty blocks from the FAT table.
+  - Chunked cluster writing using `ata_write_sector`.
+  - Creating new 32-byte directory entries in the root directory.
+- Implemented full **File Read** support following the FAT chains until `0xFFFF`.
+- Wrote string standard library functions (`strncmp`, `memset`, `memcpy`) in `string.c` needed for freestanding kernels.
+- Exposed the driver to the OS shell via new keyboard commands:
+  - `fat-ls` — View all files
+  - `fat-write <file.ext> <text>` — Allocate clusters, link chains, and write to disk!
+  - `fat-cat <file.ext>` — Follow FAT chains to read files back!
 
 **New Files:** `src/fat16.c`, `include/fat16.h`
 
@@ -481,7 +486,7 @@ Building a real read/write filesystem parser on top of the ATA driver.
 | 8 | File System (Initrd) | ✅ Done |
 | 9 | ATA PIO Hard Drive Driver | ✅ Done |
 | 10 | Virtual Memory (Paging) | ✅ Done |
-| 11 | FAT16 Filesystem Driver | 🚧 In Progress |
+| 11 | FAT16 Filesystem Driver | ✅ Done |
 
 ---
 

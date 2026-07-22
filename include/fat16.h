@@ -48,6 +48,10 @@ struct fat16_dir_entry{
 
 typedef struct fat16_dir_entry fat16_dir_entry_t;
 void fat16_init();
+void fat16_ls();
+void fat16_format_83(const char* input, char* name8, char* ext3);
+int fat16_read_file(const char* name8, const char* ext3, uint8_t* out_buffer);
+int fat16_write_file(const char* name8, const char* ext3, const uint8_t* data, uint32_t size);
 
 
 

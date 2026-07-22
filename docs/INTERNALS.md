@@ -913,6 +913,32 @@ The moment `CR0` is written with bit 31 set, the MMU activates. Every single mem
 ### Proving It Works — Page Faults
 Accessing an address outside of the mapped 4 MB (e.g. `0xA0000000`) with paging enabled triggers **Exception 14 (Page Fault)**. Our ISR catches it, preventing the kernel from blindly corrupting memory and instead printing an error. This is the hardware-enforced memory protection at work.
 
+## FAT16 Filesystem Driver
+CIndy-OS implements a complete, read-write FAT16 driver on top of the ATA PIO block device interface.
+
+### Boot Record / BPB
+Sector 0 of the formatted disk is the FAT16 Boot Sector, which contains the BIOS Parameter Block (BPB). The BPB defines how the rest of the disk is structured. We parse this into a packed structure `fat16_bpb_t`.
+
+Key metrics parsed from the BPB:
+- **`bytes_per_sector`**: Standard is 512.
+- **`sectors_per_clustor`**: The size of an allocation block (cluster).
+- **`reserved_sectors`**: Number of sectors before FAT1 (usually 1, just the boot sector).
+- **`sectors_per_fat`**: Size of each File Allocation Table.
+- **`root_dir_entries`**: Usually 512 entries, each 32 bytes.
+
+From these metrics, we establish global pointers:
+- `fat_start_sector = reserved_sectors`
+- `root_dir_start = fat_start_sector + (num_fats * sectors_per_fat)`
+- `data_start_sector = root_dir_start + ((root_dir_entries * 32) / 512)`
+
+### Directory Entries (8.3 format)
+Files are stored as 32-byte structs `fat16_dir_entry_t`. The filename is an 8-byte, space-padded string, and the extension is a 3-byte space-padded string (e.g. `TEST    TXT`). We built custom standard string functions (`strncmp`, `memcpy`) to handle these non-null-terminated strings properly.
+
+### Cluster Chains & The FAT Table
+The core mechanic of FAT16 is the File Allocation Table, an array of 16-bit integers.
+- **Reading**: To follow a file, you start at `low_first_cluster` (from the directory entry), calculate its LBA (Logical Block Address), and read it via ATA. To find the next cluster, you read `FAT[cluster_num]`. When `FAT[cluster_num] >= 0xFFF8`, it's the End of File.
+- **Writing**: To allocate, we scan the FAT table for a `0x0000` (free) slot. We write `0xFFFF` to mark the end of the new chain, update the previous cluster to point to the new one, write the data bytes to disk, and finally create a directory entry in the root directory space.
+
 ---
 
 *Keep this document updated as CIndy-OS grows. Add a new section each time you touch a new subsystem.*
