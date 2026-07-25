@@ -6,11 +6,10 @@ A bare-metal x86 hobby operating system that boots via GRUB, written from scratc
 
 ## 📊 Current Status
 
-**Version**: 0.1.0 (Alpha)  
 **Architecture**: 32-bit x86 Protected Mode  
-**Language Composition**: 88.6% C, 6% Assembly, 3.9% Makefile, 1.5% Linker Script
 
-CIndy-OS is in **active development** with core bootloader, interrupt handling, and basic I/O infrastructure complete. The kernel successfully boots via GRUB, manages memory, and provides an interactive command-line interface.
+
+CIndy-OS is in **active development** with core bootloader, interrupt handling, and basic I/O infrastructure complete. The kernel successfully boots via GRUB, manages memory, and provides an interactive command-line interface.It is something which i just like devloping over a period of time just for fun and learning purposes will just keep addig features until I feel like doing so. 
 
 ---
 
