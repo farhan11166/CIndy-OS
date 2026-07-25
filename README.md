@@ -4,6 +4,16 @@ A bare-metal x86 hobby operating system that boots via GRUB, written from scratc
 
 ---
 
+## 📊 Current Status
+
+**Version**: 0.1.0 (Alpha)  
+**Architecture**: 32-bit x86 Protected Mode  
+**Language Composition**: 88.6% C, 6% Assembly, 3.9% Makefile, 1.5% Linker Script
+
+CIndy-OS is in **active development** with core bootloader, interrupt handling, and basic I/O infrastructure complete. The kernel successfully boots via GRUB, manages memory, and provides an interactive command-line interface.
+
+---
+
 ## 📸 What it does right now
 
 When booted, CIndy-OS initializes its own GDT, sets up the IDT, remaps the Programmable Interrupt Controller (PIC), and provides a fully interactive environment:
@@ -251,7 +261,7 @@ make
 This runs the full pipeline:
 ```
 1. Assemble boot.asm, idt_load.asm, isr.asm, interrupts.asm → .o files
-2. Compile all .c files (kernel, screen, ports, idt, pic, keyboard, timer, string, memory, fs) → .o files
+2. Compile all .c files (kernel, screen, ports, idt, pic, keyboard, timer, string, memory, fs, ata) → .o files
 3. Link all object files using linker.ld → kernel.bin
 4. Copy kernel.bin to iso/boot/kernel.bin
 5. Create tar archive from fs/ directory → initrd.tar
@@ -276,35 +286,41 @@ make run-debug       # Run with debug console output
 
 ---
 
-## 🗺️ Roadmap / Next Steps
+## 🗺️ Development Roadmap
 
 ### Completed ✅
-- [x] GDT (Global Descriptor Table) flat setup
-- [x] IDT (Interrupt Descriptor Table) + CPU exception handling (32 exceptions)
-- [x] Programmable Interval Timer (PIT) — hardware timer
-- [x] PS/2 keyboard driver with scancode-to-ASCII conversion
-- [x] Interactive shell with command parsing (`argc`/`argv`)
-- [x] Memory management — Multiboot memory parsing + bump allocator
-- [x] Read-only filesystem — USTAR tar archive support (`ls`, `cat`)
+- [x] **Bootloader Integration** — GRUB Multiboot compliance and kernel loading
+- [x] **Protected Mode Setup** — GDT (Global Descriptor Table) flat memory model
+- [x] **Interrupt Handling** — IDT setup and all 32 CPU exception handlers (ISR 0-31)
+- [x] **Hardware Interrupts** — PIC remapping, IRQ routing, timer (IRQ0) and keyboard (IRQ1)
+- [x] **VGA Text Output** — Direct buffer access at 0xB8000, colored text, cursor control
+- [x] **Keyboard Input** — PS/2 scancode-to-ASCII conversion with shift/caps lock
+- [x] **Interactive Shell** — Command-line interface with argc/argv parsing
+- [x] **Programmable Interval Timer (PIT)** — Hardware timer with configurable frequency
+- [x] **Memory Management** — Multiboot memory map parsing and bump allocator (kmalloc)
+- [x] **Read-Only Filesystem** — USTAR tar archive support via initrd (ls, cat commands)
+- [x] **Disk I/O** — ATA PIO driver for 28-bit LBA sector read/write operations
+
+### Current Focus 🔄
+- [ ] **Bug fixes and stability improvements** — Memory management edge cases, interrupt handling refinements
+- [ ] **Enhanced shell commands** — Additional filesystem utilities, system diagnostics
 
 ### Future Enhancements 🎯
-- [ ] **Virtual Memory / Paging** — Enable paging for 4 GiB address space and memory protection
+- [ ] **Virtual Memory / Paging** — Enable paging for full 4 GiB address space and memory protection
 - [ ] **Dynamic Memory Management** — Implement malloc/free with fragmentation handling (heap allocator)
-- [ ] **Process Management** — Context switching, process scheduler, task switching
-- [ ] **File System Writes** — Writable filesystem (FAT12/32 or ext2
-- [ ] **Preemptive Multitasking** — Multiple processes running concurrently
-- [ ] **System Calls** — User mode vs. kernel mode, syscall interface
-- [ ] **Debugging Tools** — GDB support, kernel debugger
+- [ ] **File System Writes** — Writable filesystem support (FAT12/32 or ext2)
+- [ ] **Process Management** — Task structures, context switching, process scheduler
+- [ ] **Preemptive Multitasking** — Multiple processes running concurrently with time-slicing
+- [ ] **User Mode / Privilege Levels** — Distinction between kernel mode and user mode execution
+- [ ] **System Calls Interface** — Syscall mechanism for user programs to request kernel services
+- [ ] **Debugging Tools** — GDB stub support, kernel debugger integration
+- [ ] **Advanced Drivers** — AHCI/SATA support, USB input devices, ACPI integration
 
-### Point of View / Philosophy
-CIndy-OS is a **learning project**, not production-grade. The focus is on:
-- **Understanding hardware**: Direct hardware interaction (ports, interrupts, memory)
-- **Simplicity over efficiency**: Clean, readable code over optimization
-- **Hands-on OS concepts**: Paging, multitasking, I/O, memory management
-- **Minimal dependencies**: No external bootloaders (GRUB) or kernel frameworks
-- **Educational value**: Each component is self-contained and well-documented
-
-The goal is to explore OS kernel design from first principles, not to build a feature-complete or performant OS. Future features will prioritize learning impact over complexity.
+### Out of Scope (for now)
+- Network stack (TCP/IP, Ethernet drivers)
+- GUI / window manager
+- Audio subsystem
+- Production-grade performance optimization
 
 ---
 
@@ -316,6 +332,20 @@ The goal is to explore OS kernel design from first principles, not to build a fe
 - [James Molloy's Kernel Tutorial](http://www.jamesmolloy.co.uk/tutorial_html/) — OS fundamentals
 - [x86 Assembly Reference](https://www.felixcloutier.com/x86/) — instruction reference
 - [USTAR Tar Format](https://www.gnu.org/software/tar/manual/tar.html#SEC141) — archive format spec
+- [Intel x86 Manual](https://software.intel.com/content/www/us/en/develop/articles/intel-sdm.html) — official ISA reference
+
+---
+
+## 📝 Project Philosophy
+
+CIndy-OS is a **learning project**, not production-grade. The focus is on:
+- **Understanding hardware**: Direct hardware interaction (ports, interrupts, memory)
+- **Simplicity over efficiency**: Clean, readable code prioritized over optimization
+- **Hands-on OS concepts**: Paging, multitasking, I/O, memory management from first principles
+- **Minimal dependencies**: GRUB bootloader for multiboot compliance, nothing else
+- **Educational value**: Each component is self-contained and well-documented
+
+The goal is to explore OS kernel design from the ground up, building understanding through implementation rather than studying existing systems. Future features will prioritize learning impact and code clarity.
 
 ---
 
