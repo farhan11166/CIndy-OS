@@ -7,7 +7,8 @@
 #include "../include/string.h"
 #include "../include/types.h"
 #include "../include/ata.h"
-#include "../include/fat16.h"   
+#include "../include/fat16.h"  
+#include "../include/paging.h" 
 extern volatile unsigned int timer_ticks;
 uint8_t shift_pressed = 0;
 uint8_t caps = 0;
@@ -58,6 +59,7 @@ void execute_command(){
             print("  fat-ls                   (list FAT16 disk files)\n");
             print("  fat-cat  <file.ext>      (read  FAT16 file)\n");
             print("  fat-write <file.ext> <text>  (write FAT16 file)\n");
+            print("  run <file.ext>           (load and execute binary)\n");
             print("  read-test, write-test    (raw ATA sector test)\n");
 
         }
@@ -169,7 +171,7 @@ void execute_command(){
                 char name8[9], ext3[4];
                 fat16_format_83(argv[1], name8, ext3);
                 uint8_t buf[4096];
-                int bytes = fat16_read_file(name8, ext3, buf);
+                int bytes = fat16_read_file(name8, ext3, buf, sizeof(buf));
                 if (bytes > 0) {
                     buf[bytes] = '\0';
                     print((char*)buf);
@@ -197,6 +199,32 @@ void execute_command(){
                 content[idx] = '\0';
 
                 fat16_write_file(name8, ext3, (const uint8_t*)content, idx);
+            }
+        }
+        else if(!strcmp(argv[0],"run")){
+            if (argc < 2) {
+                print("Usage: run <filename.ext>\n");
+            } else {
+                uint32_t phy_block = pmm_alloc_block();
+                if (phy_block == 0) {
+                    print("run: out of physical memory\n");
+                } else {
+                    map_page(phy_block, 0x40000000, 3); // present + R/W
+                    char name8[9], ext3[4];
+                    fat16_format_83(argv[1], name8, ext3);
+
+                    int result = fat16_read_file(name8, ext3, (uint8_t*)0x40000000, 4096);
+                    if (result < 0) {
+                        print("run: failed to load file\n");
+                    } else {
+                        print("Loaded ");
+                        print_int(result);
+                        print(" bytes, jumping to 0x40000000...\n");
+                        void (*program)() = (void(*)())0x40000000;
+                        program();
+                        print("\nProgram returned.\n");
+                    }
+                }
             }
         }
         else{

@@ -1,4 +1,4 @@
-all:
+all: user/YOOO.bin
 	nasm -f elf32 src/boot.asm -o boot.o
 	nasm -f elf32 src/idt_load.asm -o idt_load.o
 	nasm -f elf32 src/isr.asm -o isr.o
@@ -22,13 +22,13 @@ all:
 
 	cp kernel.bin iso/boot/kernel.bin
 	cd fs && tar -cvf ../initrd.tar *
-			cp initrd.tar iso/boot/initrd.tar
-	
-
-	
-
+	cp initrd.tar iso/boot/initrd.tar
 
 	grub-mkrescue -o CIndy-os.iso iso
+
+user/YOOO.bin: user/YOOO.asm
+	nasm -f bin user/YOOO.asm -o user/YOOO.bin
+	mcopy -i disk.img -o user/YOOO.bin ::YOOO.BIN
 
 run:
 	qemu-system-i386 -boot d -cdrom CIndy-os.iso -drive file=disk.img,format=raw,index=0,media=disk

@@ -491,3 +491,79 @@ Building a real read/write filesystem parser on top of the ATA driver.
 ---
 
 *"The best way to understand how computers work is to build one."*
+
+---
+
+## Week 13 — ✅ Done
+**Phase:** Program Loader (Exec)
+
+Built a true program loader so CIndy-OS can read a flat binary from the FAT16 disk, allocate and map memory for it, and execute it.
+
+**What I Built:**
+- Added `pmm_alloc_block()` and `pmm_free_block()` to `memory.c` — a bitmap physical memory manager. `mem_bitmap[8192]` (32KB) tracks every 4KB frame of RAM as a single bit.
+- `init_pmm(struct multiboot_info* mbd)` walks the GRUB memory map and only marks type-1 (usable) regions as free. Hardware-reserved regions (VGA buffer `0xA0000`, BIOS ROM `0xF0000`) stay permanently marked as used.
+- Added `map_page(phys, virt, flags)` to `paging.c`. Finds the correct PDE/PTE, allocates a new page table from the PMM if needed, writes the mapping, and calls `invlpg` to flush the TLB.
+- Extended `init_paging()` to identity-map all 128 MB of RAM (32 page tables × 4 MB each) instead of only the first 4 MB.
+- Added the `run <file.ext>` shell command in `keyboard.c`:
+  - Calls `pmm_alloc_block()` → allocates one 4 KB physical frame.
+  - Calls `map_page(phys, 0x40000000, 3)` → maps it at virtual `0x40000000`.
+  - Calls `fat16_read_file(..., (uint8_t*)0x40000000, 4096)` → loads the binary straight into mapped memory.
+  - Casts `0x40000000` to a function pointer and calls it.
+- Created `user/YOOO.asm` — a flat 32-bit binary that writes `'X'` with bright red on white (`0x4F58`) to the bottom-right VGA cell (`0xB8F9E`) and returns with `ret`.
+- Updated `Makefile` to automatically assemble `user/YOOO.asm → user/YOOO.bin` with `nasm -f bin` and inject it into `disk.img` with `mcopy` as a build dependency.
+
+**Bugs Fixed During This Phase:**
+| Bug | Root Cause | Fix |
+|---|---|---|
+| `run` crashed or did nothing | `init_pmm` was never called — `max_frames = 0`, so `pmm_alloc_block` returned 0 (physical address 0 = IVT) | Added `init_pmm(mbd)` call in `kernel.c` after `init_memory` |
+| Binary not loaded into mapped memory | `fat16_read_file` was called with a local stack buffer `buf[4096]`, not `0x40000000` | Changed call to pass `(uint8_t*)0x40000000` directly |
+| `fat16_format_83` stopped parsing at `'0'` | `!= '0'` (character zero) instead of `!= '\0'` (null terminator) | Fixed typo |
+| `X` not visible on screen | Program wrote to row 0 col 79 (top-right) which was overwritten by boot banner | Changed target to row 24 col 79 (bottom-right, `0xB8F9E`) |
+
+**New Files:**
+| File | Purpose |
+|---|---|
+| `user/YOOO.asm` | Test flat binary: writes bright red `X` to bottom-right VGA corner and returns |
+
+---
+
+## Week 14 — ✅ Done
+**Phase:** Bug Fixes & Hardening
+
+Audited the entire codebase and fixed the highest-priority bugs.
+
+**What I Fixed:**
+
+**PMM hardware region safety (`memory.c`)**
+- Rewrote `init_pmm` to take `struct multiboot_info*` instead of a raw `uint32_t` total.
+- Now walks the GRUB mmap and only clears (frees) frames in type-1 regions. Everything else stays marked used by default — including the VGA buffer (`0xA0000`), BIOS ROM (`0xE0000`+), and frame 0 (IVT/BDA). Previously `pmm_alloc_block` could return `0xA0000` and corrupt the screen.
+
+**Full 128 MB identity map (`paging.c`)**
+- `init_paging` now allocates 32 page tables (was 1) covering all 128 MB of RAM.
+- Before this fix, `map_page` used a physical address returned by `pmm_alloc_block` as a virtual pointer to write into the new page table. Once the kernel grew past 4 MB, that pointer would be outside the identity-mapped range and cause a page fault or silent memory corruption. Now physical == virtual for all of RAM, so this is always safe.
+- Added `invlpg` TLB flush after every new PTE write.
+
+**`fat16_read_file` buffer overflow (`fat16.c`, `fat16.h`)**
+- Added a `max_size` parameter. The read loop now clamps `bytes_left = min(file_size, max_size)` before copying.
+- Updated all call sites: `fat-cat` passes `sizeof(buf)` (4096), `run` passes 4096.
+
+**`isr_common_stub` double ds restore (`isr.asm`)**
+- Fixed duplicate `mov ds, ax` — the second line was supposed to be `mov ss, ax`. `ss` was never restored after being overwritten to `0x10`.
+
+**Progress Tracker Update:**
+
+| Week | Phase | Status |
+|---|---|---|
+| 1 | Terminal Foundation | ✅ Done |
+| 2 | Debug Utilities + IDT + PIC + First Keyboard IRQ | ✅ Done |
+| 3 | Real Keyboard Input | ✅ Done |
+| 4 | Shell Prep + Cleaner Input | ✅ Done |
+| 5 | Shell | ✅ Done |
+| 6 | Better Terminal + Timers | ✅ Done |
+| 7 | Memory Management | ✅ Done |
+| 8 | File System (Initrd) | ✅ Done |
+| 9 | ATA PIO Hard Drive Driver | ✅ Done |
+| 10 | Virtual Memory (Paging) | ✅ Done |
+| 11 | FAT16 Filesystem Driver | ✅ Done |
+| 12 | Program Loader (Exec) | ✅ Done |
+| 13 | Bug Fixes & Hardening | ✅ Done |

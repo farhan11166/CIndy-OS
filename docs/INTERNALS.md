@@ -942,3 +942,169 @@ The core mechanic of FAT16 is the File Allocation Table, an array of 16-bit inte
 ---
 
 *Keep this document updated as CIndy-OS grows. Add a new section each time you touch a new subsystem.*
+
+---
+
+## 22. Bitmap Physical Memory Manager (PMM)
+
+The bump allocator (`kmalloc`) is one-way — it can never free memory. For dynamic allocation (e.g. page tables for user programs), we need a proper frame allocator.
+
+### Data Structure
+
+```c
+uint32_t mem_bitmap[8192];  // 8192 × 32 bits = 262144 bits = 262144 frames × 4KB = 1 GB addressable
+uint32_t max_frames;        // number of valid frames in physical RAM
+```
+
+Each bit represents one 4 KB physical frame. `0` = free, `1` = used.
+
+### Initialization — `init_pmm(struct multiboot_info* mbd)`
+
+The key design decision: **start with everything marked used, then explicitly free only what GRUB says is safe.**
+
+```
+Step 1: Fill all 8192 words with 0xFFFFFFFF  → every frame marked USED
+Step 2: Walk GRUB mmap entries
+          for each type-1 (usable) region → clear those frame bits (mark FREE)
+Step 3: Force frame 0 USED  (IVT + BIOS data area — never allocate this)
+Step 4: Mark frames [0..ceil(free_mem_addr/4096)] USED
+          (kernel code, stack, page tables already live here)
+```
+
+This means the VGA buffer (`0xA0000`), BIOS ROM (`0xE0000`+), and any hardware-reserved region reported as non-type-1 by the BIOS **stay permanently marked used** — they are never touched by `pmm_alloc_block`.
+
+### Allocation — `pmm_alloc_block()`
+
+Linear scan through the bitmap for the first `0` bit:
+
+```c
+for each 32-bit word in mem_bitmap:
+    if word != 0xFFFFFFFF:          // at least one free frame in this word
+        for each bit in word:
+            if bit == 0:
+                set bit to 1        // mark used
+                return frame * 4096 // physical address
+```
+
+Returns `0` if out of frames (caller must check).
+
+### Bit Operations
+
+```c
+// Frame index to bitmap position
+word_index = frame / 32;
+bit_index  = frame % 32;
+
+pmm_set_bit:   bitmap[word] |=  (1 << bit)
+pmm_clear_bit: bitmap[word] &= ~(1 << bit)
+pmm_test_bit:  bitmap[word] &   (1 << bit)
+```
+
+---
+
+## 23. Full 128 MB Identity Map
+
+### The Problem with Mapping Only 4 MB
+
+The original `init_paging` created one page table covering 4 MB. This worked while the kernel was small. But `map_page` — called after paging is on — needs to allocate a new page table for unmapped virtual address ranges:
+
+```c
+uint32_t new_table_phy = pmm_alloc_block(); // returns e.g. 0x500000
+uint32_t* page_table = (uint32_t*)new_table_phy; // VIRTUAL pointer!
+page_table[pt_index] = ...; // CPU translates 0x500000 as virtual → PAGE FAULT
+```
+
+Because paging is active, `new_table_phy` is interpreted as a virtual address. If it's above 4 MB, there's no mapping for it — instant page fault.
+
+### The Fix: Pre-map All of RAM
+
+`init_paging` now creates 32 page tables at boot time, covering 32 × 4 MB = **128 MB**:
+
+```c
+#define IDENTITY_MAP_TABLES 32
+
+for (int t = 0; t < IDENTITY_MAP_TABLES; t++) {
+    uint32_t* table = (uint32_t*)kmalloc_a(1024 * 4);
+    for (int p = 0; p < 1024; p++) {
+        uint32_t phys = (t * 1024 + p) * 0x1000;
+        table[p] = phys | 3; // present + read/write
+    }
+    page_direc[t] = (uint32_t)table | 3;
+}
+```
+
+Cost: 32 × 4 KB = **128 KB** of RAM for page tables — completely acceptable.
+
+Result: Every physical address `pmm_alloc_block()` ever returns is guaranteed to have `virtual == physical`. `map_page` can safely dereference it as a pointer.
+
+### TLB Flush with `invlpg`
+
+After writing a new PTE, the CPU's Translation Lookaside Buffer (TLB) may still cache the old (invalid) translation for that virtual address. `invlpg` flushes exactly one entry:
+
+```c
+asm volatile("invlpg (%0)" :: "r"(virtual_addr) : "memory");
+```
+
+Without this, a previously cached "not present" entry could persist and the new mapping would appear to not work.
+
+---
+
+## 24. Program Loader (`run` command)
+
+The `run` command in `keyboard.c` ties together the PMM, paging, and FAT16 into a minimal program loader.
+
+### Execution Flow
+
+```
+run YOOO.BIN
+    │
+    ▼
+pmm_alloc_block()
+    → returns a free 4KB physical frame (e.g. 0x500000)
+    │
+    ▼
+map_page(0x500000, 0x40000000, 3)
+    → PD index = 0x40000000 >> 22 = 256
+    → PT index = (0x40000000 >> 12) & 0x3FF = 0
+    → allocates page table for PD[256] if not present
+    → writes PTE: 0x500000 | 3
+    → invlpg(0x40000000)
+    │
+    ▼
+fat16_read_file("YOOO    ", "BIN", (uint8_t*)0x40000000, 4096)
+    → follows FAT chain on disk
+    → copies raw binary bytes into physical 0x500000
+      (accessed via virtual 0x40000000 — same thing, just mapped)
+    │
+    ▼
+void (*program)() = (void(*)())0x40000000;
+program();
+    → CPU executes machine code at virtual 0x40000000
+    → program does its work (e.g. writes to VGA)
+    → executes ret → returns to kernel shell
+```
+
+### `user/YOOO.asm` — The Test Program
+
+```asm
+[BITS 32]
+; Write 'X' (bright red on white, 0x4F58) to bottom-right VGA cell
+; Row 24, Col 79 → offset = (24*80 + 79)*2 = 3998 → 0xB8000 + 3998 = 0xB8F9E
+mov word [0xB8F9E], 0x4F58
+ret
+```
+
+- Assembled with `nasm -f bin` (flat binary, no ELF header)
+- No `[ORG ...]` needed — the `mov` uses an absolute address, not a relative one
+- `ret` pops the return address the kernel pushed with `call` and returns cleanly
+
+### Constraints
+
+- Program runs in **ring 0** (kernel mode) — full hardware access, no isolation
+- Maximum size: 4 KB (one page frame). Larger programs need multiple `map_page` calls
+- Must end with `ret` — a naked jump into the kernel's call frame would crash it
+- Flat binary format only — no ELF header, no relocations
+
+---
+
+*Keep this document updated as CIndy-OS grows.*

@@ -48,3 +48,60 @@ Because QEMU's default boot priority tried the Hard Drive first, the BIOS saw `0
 
 **Solution:**
 We updated the QEMU command in the `Makefile` to include `-boot d`, explicitly telling QEMU to prioritize the CD-ROM (`CIndy-os.iso`) which contains GRUB.
+
+---
+
+## 3. `run` Command Does Nothing / Triple Fault
+
+**Symptoms:**
+Typing `run YOOO.BIN` printed "Loaded 10 bytes, jumping to 0x40000000..." but either nothing happened, the OS froze, or QEMU triple-faulted and rebooted.
+
+**Root Causes (three separate bugs):**
+
+**A) `init_pmm` was never called**
+`kernel.c` called `init_memory` and `init_paging` but not `init_pmm`. With `init_pmm` never called, `max_frames = 0`. Every call to `pmm_alloc_block()` immediately hit `frame >= max_frames` and returned `0`. Physical address `0` is the real-mode Interrupt Vector Table. The `run` command was mapping the IVT to `0x40000000` and jumping into it — a guaranteed crash.
+
+**Fix:** Added `init_pmm(mbd)` in `kernel.c` between `init_memory` and `init_paging`.
+
+**B) Binary loaded into a stack buffer, not the mapped address**
+Even after fixing A, the binary was read into `uint8_t buf[4096]` on the kernel stack, not into `0x40000000`. The `program()` call was jumping into whatever uninitialized bytes happened to be at `0x40000000`.
+
+**Fix:** Changed the `fat16_read_file` call to pass `(uint8_t*)0x40000000` directly.
+
+**C) `fat16_format_83` had `!= '0'` instead of `!= '\0'`**
+The filename parsing loop had a typo — it stopped at the character `'0'` (ASCII 48) instead of the null terminator `'\0'` (ASCII 0). For `YOOO.BIN` this happened not to matter, but for any filename containing the digit `0` it would produce a wrong 8.3 name and `fat16_read_file` would return "file not found".
+
+**Fix:** Changed `!= '0'` to `!= '\0'`.
+
+---
+
+## 4. Program Executes But `X` Is Not Visible
+
+**Symptoms:**
+`run YOOO.BIN` completed successfully ("Program returned."), but no `X` appeared on screen.
+
+**Root Cause:**
+`YOOO.asm` was originally writing to `0xB8000 + 158` = row 0, col 79 (top-right corner). The ASCII art boot banner fills row 0 on startup, overwriting that cell. Then every `scroll_screen()` call shifts all rows up, moving the `X` further up until it scrolls off the top.
+
+Additionally, the original binary on disk was assembled without `[BITS 32]` at some point, resulting in a `0x66` operand-size prefix in the instruction stream, though the address encoding was still correct.
+
+**Fix:**
+Changed the write target to row 24, col 79 (bottom-right corner): `0xB8000 + (24*80 + 79)*2 = 0xB8F9E`. Changed the color to `0x4F` (bright red on white) for maximum visibility. Also added the `user/YOOO.bin` build rule and `mcopy` injection step to the Makefile so the binary is always rebuilt and updated in `disk.img` automatically.
+
+---
+
+## 5. `map_page` Causes Page Fault After Kernel Grows Past 4 MB
+
+**Symptoms:**
+Does not crash immediately, but any call to `map_page` for a virtual address outside the first 4 MB range causes a page fault. Specifically, when `pmm_alloc_block()` returns a physical address ≥ `0x400000`, writing through that pointer with paging enabled faults.
+
+**Root Cause:**
+`init_paging` only created one page table covering the first 4 MB. `map_page` allocates a new page table via `pmm_alloc_block()` and then does:
+```c
+uint32_t* page_table = (uint32_t*)new_table_phy; // physical addr used as virtual!
+page_table[i] = 0;
+```
+With paging on, the CPU translates `new_table_phy` as a virtual address. Any physical address ≥ `0x400000` has no virtual mapping → page fault.
+
+**Fix:**
+Extended `init_paging` to create 32 page tables (128 MB identity map). Now every physical address the PMM could ever return has `virtual == physical`, making the pointer always safe to dereference.

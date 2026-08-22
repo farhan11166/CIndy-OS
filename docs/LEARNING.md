@@ -48,3 +48,54 @@ Paging was the most complex but most rewarding concept I implemented. I built an
 
 *This project demystified the "magic" of operating systems. I now have a deep, practical understanding of pointers, memory management, and hardware interaction.*
 
+
+## 12. Bitmap Physical Memory Manager
+
+A bitmap PMM is the standard first step beyond a bump allocator. I learned that tracking physical frames with one bit each is efficient — 8192 `uint32_t` words cover 1 GB of addressable RAM using only 32 KB of memory.
+
+The critical design insight: **start with all bits set (everything used), then only free regions the GRUB memory map explicitly says are safe.** This ensures hardware-mapped regions (VGA buffer, BIOS ROM) are permanently off-limits without needing to explicitly reserve them.
+
+I also learned the difference between the bump allocator and the PMM: the bump allocator is one-way and used only at boot time for permanent structures. The PMM is bidirectional (alloc + free) and used for dynamic runtime allocations like page tables for new mappings.
+
+## 13. Identity Mapping and the Physical-as-Virtual Pointer Problem
+
+This was the subtlest bug I fixed. When paging is enabled, every pointer the CPU dereferences is a **virtual address**. This means:
+
+```c
+uint32_t phys = pmm_alloc_block();     // e.g. 0x500000
+uint32_t* ptr = (uint32_t*)phys;       // treated as VIRTUAL 0x500000
+ptr[0] = something;                    // page fault if 0x500000 not mapped!
+```
+
+The only safe way to use a physical address as a pointer after enabling paging is if that address is inside an identity-mapped region (virtual == physical). So the solution is: **identity-map all of RAM before enabling paging**, not just the first 4 MB you know the kernel uses. Then any frame the PMM returns is guaranteed to be accessible as a pointer.
+
+32 page tables × 4 MB = 128 MB covered. Cost: 128 KB of RAM. Completely worth it.
+
+## 14. The TLB and `invlpg`
+
+The Translation Lookaside Buffer (TLB) is a cache inside the CPU that stores recently used virtual→physical translations. When you write a new PTE into a page table, the CPU doesn't automatically invalidate the old cached translation for that address.
+
+`invlpg` flushes exactly one TLB entry:
+```asm
+invlpg [virtual_address]
+```
+
+Without it, you can have a valid PTE in the page table but the CPU still uses the old (stale) cached translation — so your new mapping appears to not work, or worse, points at the wrong physical address. This is a subtle class of bug that only manifests in specific timing or reuse scenarios.
+
+## 15. Flat Binary Program Execution
+
+An ELF file has headers, sections, relocations — lots of infrastructure. A flat binary is just raw machine code bytes starting at offset 0. When you assemble with `nasm -f bin`, that's exactly what you get.
+
+To execute a flat binary loaded at address `0x40000000`:
+```c
+void (*fn)() = (void(*)())0x40000000;
+fn();
+```
+
+The C compiler emits a `call` instruction, which pushes a return address then jumps to the target. The binary just needs to end with `ret` to pop that return address and come back to the kernel cleanly.
+
+The key constraint is that the binary must use **absolute addresses** for any memory it accesses (like VGA at `0xB8F9E`), not relative ones, because there's no linker script or relocation table telling it where it was loaded.
+
+---
+
+*This project demystified the "magic" of operating systems. I now have a deep, practical understanding of pointers, memory management, and hardware interaction.*

@@ -9,7 +9,7 @@ void fat16_format_83(const char* input , char* name8, char* ext3){
     memset(name8,' ',8);
     memset(ext3,' ',3);
     int i=0;
-    while(input[i] !='0' && input[i] !='.' && i<8){
+    while(input[i] !='\0' && input[i] !='.' && i<8){
         char c = input[i];
         if (c >= 'a' && c <= 'z') c -= 32; // Uppercase
         name8[i] = c;
@@ -157,7 +157,7 @@ ls_done:
 }
 
 
-int fat16_read_file(const char* name8, const char* ext3, uint8_t* out_buffer){
+int fat16_read_file(const char* name8, const char* ext3, uint8_t* out_buffer, uint32_t max_size){
     fat16_dir_entry_t target;
     int found = 0;
 
@@ -199,7 +199,10 @@ int fat16_read_file(const char* name8, const char* ext3, uint8_t* out_buffer){
       uint32_t bytes_left = target.file_size;
        uint32_t out_pos    = 0;
 
-
+    // Clamp bytes_left to max_size so we never write past the caller's buffer
+    if (bytes_left > max_size) {
+        bytes_left = max_size;
+    }
 
     while (cluster >= 0x0002 && cluster < 0xFFF8 && bytes_left > 0) {
         uint32_t lba = fat16_cluster_to_lba(cluster);

@@ -112,6 +112,7 @@ void kernel_main(unsigned int magic, struct multiboot_info* mbd) {
     
     //int a=1/0;
     init_memory(mbd,magic);
+    init_pmm(mbd);
     init_paging();
     
     if(mbd->mods_count >0){
