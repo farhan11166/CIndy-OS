@@ -9,7 +9,10 @@
 #include "../include/ata.h"
 #include "../include/fat16.h"  
 #include "../include/paging.h" 
+#include "../include/gdt.h"
 extern volatile unsigned int timer_ticks;
+extern uint8_t stack_top[];
+extern uint32_t saved_kernel_esp;
 uint8_t shift_pressed = 0;
 uint8_t caps = 0;
 
@@ -209,7 +212,7 @@ void execute_command(){
                 if (phy_block == 0) {
                     print("run: out of physical memory\n");
                 } else {
-                    map_page(phy_block, 0x40000000, 3); // present + R/W
+                    map_page(phy_block, 0x40000000, 7); // present + R/W + user
                     char name8[9], ext3[4];
                     fat16_format_83(argv[1], name8, ext3);
 
@@ -217,12 +220,19 @@ void execute_command(){
                     if (result < 0) {
                         print("run: failed to load file\n");
                     } else {
+                        uint32_t user_stack_phys = pmm_alloc_block();
+                        map_page(user_stack_phys, 0x80000000, 7); // present + R/W + user
+                        uint32_t user_stack_top = 0x80000FFC; // within the mapped page
+
                         print("Loaded ");
                         print_int(result);
-                        print(" bytes, jumping to 0x40000000...\n");
-                        void (*program)() = (void(*)())0x40000000;
-                        program();
-                        print("\nProgram returned.\n");
+                        print(" bytes, jumping to ring 3 at 0x40000000...\n");
+                        tss_set_kernel_stack((uint32_t)&stack_top);
+                        debug_print("about to call jump_to_usermode\n");
+                        jump_to_usermode(user_stack_top, 0x40000000);
+                        debug_print("jump_to_usermode returned\n");
+                        /* kernel_return() in usermode.asm resumes here on exit syscall */
+                        print("Program exited.\n");
                     }
                 }
             }

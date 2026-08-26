@@ -10,6 +10,7 @@
 #include "../include/memory.h"
 #include "../include/fat16.h"
 #include "../include/paging.h"
+#include  "../include/gdt.h"
 extern void isr0(); extern void isr1(); extern void isr2(); extern void isr3();
 extern void isr4(); extern void isr5(); extern void isr6(); extern void isr7();
 extern void isr8(); extern void isr9(); extern void isr10(); extern void isr11();
@@ -22,8 +23,29 @@ extern void isr28(); extern void isr29(); extern void isr30(); extern void isr31
 
 extern void isr33();
 extern void isr32();
+extern void isr128();
 extern void timer_handler();
+extern uint8_t stack_top[];
 
+/* saved by jump_to_usermode before iret — restored by kernel_return */
+uint32_t saved_kernel_esp = 0;
+volatile uint32_t syscall_exit_requested = 0;
+
+void syscall_handler() {
+    uint32_t eax;
+    asm volatile("mov %%eax, %0" : "=r"(eax));
+    debug_print("syscall_handler: eax=");
+    debug_print(eax == 0 ? "EXIT(0)" : "OTHER");
+    debug_print("\n");
+
+    if (eax == 0) {
+        syscall_exit_requested = 1;
+        debug_print("-> exit syscall requested\n");
+        return;
+    }
+
+    syscall_exit_requested = 0;
+}
 
 void keyboard_handler() {
     unsigned char scancode = inb(0x60);
@@ -107,13 +129,16 @@ void kernel_main(unsigned int magic, struct multiboot_info* mbd) {
     
     idt_set_gate(32, (unsigned int)isr32, 0x08, 0x8E);
     idt_set_gate(33, (unsigned int)isr33, 0x08, 0x8E);
+    idt_set_gate(0x80,(unsigned int)isr128,0x08,0xEE);
     enable_interrupts();
     init_timer(100);
     
     //int a=1/0;
     init_memory(mbd,magic);
+    init_paging();   // must be before init_pmm so page table frames are counted as used
     init_pmm(mbd);
-    init_paging();
+    gdt_init_tss((uint32_t)&stack_top);
+
     
     if(mbd->mods_count >0){
         struct multiboot_mod_list* module=(struct multiboot_mod_list*)mbd->mods_addr;

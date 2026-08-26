@@ -105,3 +105,23 @@ With paging on, the CPU translates `new_table_phy` as a virtual address. Any phy
 
 **Fix:**
 Extended `init_paging` to create 32 page tables (128 MB identity map). Now every physical address the PMM could ever return has `virtual == physical`, making the pointer always safe to dereference.
+
+---
+
+## 6. Ring-3 Crash: Invalid TSS Descriptor and Stale Stack on Exit
+
+**Symptoms:**
+The kernel boots, prints the startup banner, loads the `run` command, and then trips a page fault immediately after jumping to user mode or after `int 0x80` returns.
+
+**Root Cause:**
+There were two separate but related bugs:
+
+1. The GDT TSS descriptor was not a valid 16-byte 32-bit TSS descriptor. That meant the CPU could not trust the TSS when switching to ring 3.
+2. The user-mode exit path restored the kernel stack and then still executed `iret` on stale state, leaving the CPU to resume with the wrong stack frame.
+
+**Fix:**
+- Expanded the TSS slot in the GDT to a full 16-byte descriptor.
+- Saved the original kernel `esp` before entering ring 3.
+- Restored that saved kernel stack before returning to the kernel call site instead of reusing the user stack frame.
+
+This is the final fix that made the user-mode transition path stable instead of crashing on the first ring switch.

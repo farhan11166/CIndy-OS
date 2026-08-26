@@ -10,6 +10,7 @@ void scroll_screen();
 void print_colored(const char* message, unsigned char color);
 void update_cursor();
 void enable_cursor(unsigned char cursor_start, unsigned char cursor_end);
+void debug_print(const char* str);
 
 
 #endif

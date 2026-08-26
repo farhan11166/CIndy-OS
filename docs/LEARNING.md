@@ -99,3 +99,127 @@ The key constraint is that the binary must use **absolute addresses** for any me
 ---
 
 *This project demystified the "magic" of operating systems. I now have a deep, practical understanding of pointers, memory management, and hardware interaction.*
+
+---
+
+# Deep dives (concise)
+
+Below are short, focused explanations for the four subsystems you asked for: PMM, GDT/TSS, ATA PIO, and Paging. Each one gives the core concept, why it matters, and what to check when it breaks.
+
+## Bitmap Physical Memory Manager (PMM)
+
+What it is:
+- The PMM tracks physical 4 KiB frames using a bitmap: one bit per frame (0=free, 1=used).
+- The kernel initializes the bitmap from the GRUB memory map: mark everything used, then mark ranges of type=1 as free.
+
+Why it matters:
+- Any subsystem that needs a physical frame (page table, user page, disk buffer) calls `pmm_alloc_block()` to get a frame.
+- If PMM is wrong, `pmm_alloc_block()` can return invalid frames (0 or reserved regions), causing corruption or crashes.
+
+Key operations:
+- allocate: find a zero bit, set it to 1, return frame_base = index * 4096
+- free: clear the bit
+- helpers: mark_range(addr, length, used/free)
+
+Common bugs & checks:
+- PMM not initialized → all frames treated as used (or all free) → allocations fail or return invalid 0
+- Incorrect GRUB memory parsing → important hardware areas accidentally freed (VGA, BIOS ROM)
+- Off-by-one when converting bytes ↔ frames → wrong range marked
+
+How to debug:
+- Print `max_frames` and the first few bitmap words during boot.
+- Verify `pmm_alloc_block()` never returns 0 after `init_pmm()` completes (unless exhausted).
+- Temporarily reserve known addresses (VGA at 0xB8000) and ensure allocator never returns them.
+
+## GDT & TSS (Global Descriptor Table and Task State Segment)
+
+What it is:
+- GDT: an array of descriptors that define code/data segments and special descriptors (like TSS).
+- TSS: a structure the CPU can use to load a stack when switching privilege levels (ring 3 → ring 0).
+
+Why it matters:
+- The GDT establishes the CPU's segment selectors (CS/DS). Even in a flat 32-bit model we still need correct descriptors.
+- The TSS contains `esp0`/`ss0` used by the CPU when an interrupt or an `iret` forces a privilege change back to ring 0; a malformed TSS descriptor or wrong `esp0` causes immediate faults on privilege transitions.
+
+Key facts:
+- A 32-bit (available) TSS descriptor uses a 16-byte entry in the GDT (two consecutive 8-byte slots). Its type field is 0x9 (available) or 0xB (busy) with the present bit set.
+- `esp0` must point to a valid kernel stack page. The kernel should update it before entering user mode for each process/thread.
+
+Common bugs & checks:
+- TSS descriptor only 8 bytes or with wrong flags → CPU misreads TSS → page faults on ring change.
+- `esp0` points into unmapped memory → page fault on hardware-initiated ring change.
+- Forgetting to allocate two GDT entries (8 * 2 = 16 bytes) for a 32-bit TSS descriptor.
+
+How to debug:
+- Print GDT descriptor bytes after `write_tss_descriptor()` and verify the type (0x89) and flags include D/B where needed.
+- Confirm `tss.esp0` value before iret/jump to user mode.
+- Validate GDT layout in `boot.asm` matches the selectors used across the codebase (0x08, 0x10, 0x1B, 0x23, 0x28).
+
+## ATA PIO (Programmed I/O) driver
+
+What it is:
+- ATA PIO is the classic way to read/write sectors from a disk using I/O ports (no DMA).
+- Steps: select drive, write LBA high bits to head register, set sector count and LBA low/mid/high, issue READ/WRITE command, poll status bits, read/write data via `inw`/`outw`.
+
+Why it matters:
+- The FAT16 driver and the `run` loader depend on correct sector reads and writes.
+- Mistakes in drive selection or polling can hang the kernel or return corrupted data.
+
+Key registers & bits (primary IDE):
+- Data: 0x1F0 (read/write words)
+- Error / Features: 0x1F1
+- Sector Count: 0x1F2
+- LBA Low/Mid/High: 0x1F3/0x1F4/0x1F5
+- Drive/Head: 0x1F6 (also contains LBA top bits and drive select)
+- Status: 0x1F7 (BSY=0x80, DRQ=0x08, ERR=0x01)
+- Command: 0x1F7 (write a command like 0x20 for READ)
+
+Common bugs & checks:
+- Not selecting the correct drive before polling (CD-ROM vs HDD) → infinite wait
+- Polling loop that never checks for ERR or timeout → hang
+- Using `inb`/`inw` mismatch (byte vs word) → corrupted sector contents
+
+How to debug:
+- Log the status port `0x1F7` and print BSY/DRQ/ERR while issuing commands.
+- Ensure `outb(0x1F6, 0xE0 | ((lba >> 24) & 0x0F))` is called before waiting for ready.
+- Add a timeout to the polling loops and print diagnostic if timeout hits.
+
+## Paging & TLB (quick practical guide)
+
+What it is:
+- Paging translates virtual addresses to physical addresses using a page directory and page tables (two-level on x86 without PAE).
+- CR3 holds the physical base of the page directory; CR0.PG enables paging.
+- TLB caches translations; `invlpg` invalidates a single virtual address translation.
+
+Why it matters:
+- Paging lets the kernel isolate processes, protect kernel memory, and present each process its own virtual layout.
+- A wrong PTE/PDE or forgetting `invlpg` is the fastest way to get mysterious page faults.
+
+Key practical rules:
+- Identity-map a region large enough that kernel code which uses physical addresses (e.g., PMM frames during early boot) can safely dereference returned physical addresses.
+- When creating a new page table: allocate a physical frame, write the PDE with present bit, then fill the page table entries, then `invlpg` the mapped virtual addresses as needed.
+- Always set the present bit when writing a PTE; set R/W and user bits according to access level.
+
+Common bugs & checks:
+- Using a physical address as a pointer after paging is enabled when that physical address isn't identity-mapped → page fault
+- Forgetting to set the present bit in PDE/PTE → access fault
+- Not calling `invlpg` after replacing a mapping in a running context where the old translation is cached
+
+How to debug:
+- Print `cr0`/`cr3` values during boot.
+- Print PDE/PTE contents for the virtual address you expect to be mapped.
+- Use the page-fault handler to print CR2 (faulting virtual address) and the error code to know if a read/write/user issue occurred.
+
+---
+
+# Next practical steps (short list)
+
+1. Add unit-style tests in QEMU for the `run` flow: script boot → `run YOOO.BIN` → validate return. This will prevent regressions.
+2. Add timeouts and diagnostics to ATA polling loops to avoid hangs on faulty devices.
+3. Add `panic()` helper that prints state (CR2, EIP, registers) and drops to a safe hlt loop — use in PMM and paging assertion failures.
+4. Replace the flat binary loader with a minimal ELF loader so user programs can be compiled with normal toolchains.
+5. Implement a simple syscall dispatcher with a guarded trampoline (validate arguments) rather than special-case exit handling.
+
+If you'd like, I can implement (1) the QEMU automated test script and (2) the ATA polling timeouts next — pick one and I’ll start.  
+
+If you want extra detail on any single point above (e.g., a walkthrough of how to compute PDE/PTE indices and flags, or a step-by-step ATA READ sector example with status checks), say which one and I’ll add a compact code-level walkthrough.

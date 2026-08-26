@@ -6,6 +6,8 @@ A bare-metal x86 hobby operating system that boots via GRUB, written from scratc
 
 ## 📸 What it does right now
 
+CIndy-OS is now a working bare-metal x86 kernel with a stable boot path, protected-mode memory setup, interrupt handling, and a user-mode transition path that no longer crashes on ring-3 entry/exit. The project is intentionally structured as a learning OS: each subsystem is small, understandable, and wired together by hand.
+
 When booted, CIndy-OS initializes its own GDT, sets up the IDT, remaps the PIC, and provides a fully interactive environment:
 
 1. **Hardware Interrupts**: Handles timer ticks (IRQ0) and keyboard input (IRQ1).
@@ -192,9 +194,13 @@ make run-debug    # QEMU headless, kernel output to stdout via port 0xE9
 - [x] FAT16 filesystem — full read/write (`fat-ls`, `fat-cat`, `fat-write`)
 - [x] Program Loader — load and execute flat binaries from disk (`run`)
 
+### Completed and Stabilized ✅
+- [x] **Protected-mode GDT + TSS** — valid 32-bit TSS descriptor, proper ring-3 transition setup
+- [x] **User-mode jump/return flow** — fixed stale-stack exit bug that caused page faults after `int 0x80`
+- [x] **Ring-3 test binary loading** — `run YOOO.BIN` now transitions into user mode on a mapped page and returns cleanly
+
 ### Future Enhancements 🎯
-- [ ] **User Mode (Ring 3)** — separate kernel/user address spaces, privilege separation
-- [ ] **System Calls** — `int 0x80` or `syscall` interface
+- [ ] **System Calls** — a cleaner, safer syscall ABI beyond the current exit stub
 - [ ] **Process Management** — context switching, process table, scheduler
 - [ ] **Dynamic Memory Allocator** — `malloc`/`free` with a free-list or buddy allocator
 - [ ] **Writable Extended FS** — subdirectories, file deletion

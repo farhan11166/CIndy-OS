@@ -3,7 +3,32 @@
 > A bare-metal x86 operating system built from scratch in C and NASM Assembly.
 > This log tracks weekly progress, bugs squashed, and things learned along the way.
 >
-> Current plan: this is a focused learner project where I write the code myself, understand each subsystem, and keep the scope small enough to finish a working base in about two weeks.
+> Current plan: keep the kernel small, clear, and understandable while adding the minimum working pieces needed for a stable protected-mode OS.
+
+---
+
+## Patch — August 2026 — GDT/TSS and Ring-3 Exit Fix
+
+**Phase:** Stability + user-mode transition
+
+### ✅ What I Fixed
+- Corrected the TSS descriptor layout in the GDT so it is a valid 16-byte 32-bit TSS descriptor instead of an incomplete 8-byte entry.
+- Ensured the kernel saves the original ESP before jumping to ring 3 and restores it correctly on user-mode exit.
+- Removed the stale-stack bug where `int 0x80` returned through an `iret` path even after the kernel stack had already been restored.
+
+### 🐛 Root Cause
+The crash was a classic x86 privilege-transition bug:
+
+1. The TSS descriptor was malformed, so the CPU could not trust the TSS structure.
+2. The user-mode exit stub returned using the wrong stack state.
+3. The CPU then resumed with the wrong `ss:esp` or a stale stack frame, which triggered the page fault seen in the screenshots.
+
+### 📚 What This Means
+This project now has a real understanding of:
+- GDT/TSS layout
+- ring transitions
+- privilege boundaries
+- the importance of saving/restoring kernel stack state during `iret`
 
 ---
 

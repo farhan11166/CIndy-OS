@@ -28,10 +28,10 @@ void init_paging() {
 
         for (int p = 0; p < 1024; p++) {
             uint32_t phys = ((uint32_t)t * 1024 + (uint32_t)p) * 0x1000;
-            table[p] = phys | 3; // present + read/write
+            table[p] = phys | 7; // present + read/write + user
         }
 
-        page_direc[t] = (uint32_t)table | 3;
+        page_direc[t] = (uint32_t)table | 7; // present + read/write + user
     }
 
     // Load page directory base into CR3
@@ -54,7 +54,7 @@ void map_page(uint32_t physical_addr, uint32_t virtual_addr, uint32_t flags) {
         uint32_t new_table_phy = pmm_alloc_block();
 
         // Install in the page directory
-        page_direc[pd_index] = new_table_phy | 3;
+        page_direc[pd_index] = new_table_phy | 7;
 
         // Because init_paging() identity-maps all of RAM, new_table_phy is a
         // valid virtual address here — physical == virtual in the identity map.

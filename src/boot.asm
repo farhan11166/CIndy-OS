@@ -1,11 +1,15 @@
 global start
 extern kernel_main
 
+global gdt_tss
+global stack_top
 MAGIC     equ 0x1BADB002
 FLAGS     equ 3
 CHECKSUM  equ -(MAGIC + FLAGS)
-CODE_SEG  equ gdt_code - gdt_start
-DATA_SEG  equ gdt_data - gdt_start
+KERNEL_CODE_SEG equ gdt_code - gdt_start
+KERNEL_DATA_SEG equ gdt_data - gdt_start
+USER_CODE_SEG   equ gdt_user_code - gdt_start
+USER_DATA_SEG   equ gdt_user_data - gdt_start
 
 section .note.GNU-stack noalloc noexec nowrite progbits
 
@@ -27,15 +31,15 @@ bits 32
 start:
     cli
     lgdt [gdt_descriptor]
-    jmp CODE_SEG:flush_segments
+    jmp KERNEL_CODE_SEG:flush_segments
 
 flush_segments:
-    mov cx, DATA_SEG
-    mov ds, cx
-    mov es, cx
-    mov fs, cx
-    mov gs, cx
-    mov ss, cx
+    mov ax, KERNEL_DATA_SEG
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
 
     mov esp, stack_top  ; set up stack before doing anything
     push ebx;
@@ -46,8 +50,7 @@ hang:
     cli
     hlt
     jmp hang
-
-section .rodata
+section .data
 align 8
 gdt_start:
 gdt_null:
@@ -56,8 +59,16 @@ gdt_code:
     dq 0x00CF9A000000FFFF
 gdt_data:
     dq 0x00CF92000000FFFF
+gdt_user_code:
+    dq 0x00CFFA000000FFFF
+gdt_user_data:
+    dq 0x00CFF2000000FFFF
+gdt_tss:
+    dq 0
+    dq 0
 gdt_end:
 
 gdt_descriptor:
     dw gdt_end - gdt_start - 1
     dd gdt_start
+   

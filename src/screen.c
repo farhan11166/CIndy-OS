@@ -12,6 +12,13 @@ static void debug_putc(char c) {
     __asm__ volatile("outb %0, $0xE9" : : "a"(c));
 }
 
+void debug_print(const char* str) {
+    while (*str) {
+        debug_putc(*str);
+        str++;
+    }
+}
+
 void clear_screen(){
     for(int i=0;i<80*25;i++){
         video_memory[i*2]=' ';

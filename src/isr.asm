@@ -1,8 +1,12 @@
 global isr33
 global isr32
+global isr128
 extern keyboard_handler
 extern timer_handler
 extern fault_handler
+extern syscall_handler
+extern saved_kernel_esp
+extern syscall_exit_requested
 
 section .text
 bits 32
@@ -107,5 +111,25 @@ isr33:
 
     popa
     iret
+
+
+isr128:
+  cli
+  pusha
+  call syscall_handler
+
+  mov eax, [syscall_exit_requested]
+  cmp eax, 0
+  je .resume_interrupt
+
+  ; User-space exit syscall: restore the kernel stack that was saved before
+  ; jump_to_usermode(), then return directly to the kernel call site instead of
+  ; doing an iret on a stale user stack frame.
+  mov esp, [saved_kernel_esp]
+  ret
+
+.resume_interrupt:
+  popa
+  iret
 
 section .note.GNU-stack noalloc noexec nowrite progbits

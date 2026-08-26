@@ -35,17 +35,34 @@ char *exception_messages[] = {
     "Reserved", "Reserved", "Reserved", "Reserved", "Reserved", "Reserved"
 };
 void fault_handler(struct registers *regs) {
-    // If the interrupt number is less than 32, it's a CPU exception
     if (regs->int_no < 32) {
         print("EXCEPTION: ");
         print(exception_messages[regs->int_no]);
         print("\n");
-        print("System Halted!\n");
-        
-        // Halt the CPU forever
-        while(1) {
-            asm volatile("cli; hlt");
+
+        print("  EIP: "); print_hex(regs->eip);
+        print("  CS:  "); print_hex(regs->cs);
+        print("\n");
+        print("  ERR: "); print_hex(regs->err_code);
+        print("\n");
+
+        // For page faults (int 14), CR2 holds the faulting virtual address
+        if (regs->int_no == 14) {
+            unsigned int cr2;
+            asm volatile("mov %%cr2, %0" : "=r"(cr2));
+            print("  CR2 (fault addr): "); print_hex(cr2);
+            print("\n");
+
+            // Decode error code bits
+            print("  Cause: ");
+            if (regs->err_code & 1) print("protection violation"); else print("not present");
+            if (regs->err_code & 2) print(", write"); else print(", read");
+            if (regs->err_code & 4) print(", user mode"); else print(", kernel mode");
+            print("\n");
         }
+
+        print("System Halted!\n");
+        while(1) { asm volatile("cli; hlt"); }
     }
 }
 
