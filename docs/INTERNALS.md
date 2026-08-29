@@ -25,7 +25,7 @@
 
 ## 0. Current Kernel Status — What Is Working Today
 
-CIndy-OS is now a stable protected-mode kernel with working boot, IDT, PIC, paging, filesystem layers, and a validated user-mode transition path. The biggest low-level bug that caused the page-fault crash was a combination of:
+CIndy-OS is now a stable protected-mode kernel with working boot, IDT, PIC, paging, filesystem layers, a validated user-mode transition path, and a minimal syscall model. The biggest low-level bug that caused the page-fault crash was a combination of:
 
 - an invalid 32-bit TSS descriptor in the GDT
 - a stale kernel stack being reused after the user-mode `int 0x80` exit stub
@@ -33,6 +33,12 @@ CIndy-OS is now a stable protected-mode kernel with working boot, IDT, PIC, pagi
 The fix was to give the TSS descriptor the proper 16-byte form and ensure the exit path restored the saved kernel ESP before returning to the kernel call site instead of doing another `iret` on a stale user stack frame.
 
 This is the reason the project now has a real ring-3 transition path rather than just a crashy mockup.
+
+The current design is intentionally small and incremental:
+- ring 3 works for minimal user programs
+- syscalls are implemented as a tiny ABI and are easy to extend
+- ELF loading is minimal but working for simple executables
+- the next major step is a `process` abstraction and scheduler
 
 ---
 

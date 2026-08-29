@@ -1,4 +1,4 @@
-all: user/YOOO.bin
+all: user/YOOO.bin user/hello_elf.elf
 	nasm -f elf32 src/boot.asm -o boot.o
 	nasm -f elf32 src/idt_load.asm -o idt_load.o
 	nasm -f elf32 src/isr.asm -o isr.o
@@ -20,8 +20,9 @@ all: user/YOOO.bin
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/fat16.c -o fat16.o
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/paging.c -o paging.o
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/gdt.c -o gdt.o
+	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/syscall.c -o syscall.o
 
-	ld -m elf_i386 -T linker.ld -o kernel.bin boot.o kernel.o screen.o ports.o idt.o pic.o isr.o idt_load.o interrupts.o keyboard.o timer.o string.o memory.o fs.o ata.o fat16.o paging.o gdt.o gdt_flush.o usermode.o
+	ld -m elf_i386 -T linker.ld -o kernel.bin boot.o kernel.o screen.o ports.o idt.o pic.o isr.o idt_load.o interrupts.o keyboard.o timer.o string.o memory.o fs.o ata.o fat16.o paging.o gdt.o syscall.o gdt_flush.o usermode.o
 
 	cp kernel.bin iso/boot/kernel.bin
 	cd fs && tar -cvf ../initrd.tar *
@@ -32,6 +33,11 @@ all: user/YOOO.bin
 user/YOOO.bin: user/YOOO.asm
 	nasm -f bin user/YOOO.asm -o user/YOOO.bin
 	mcopy -i disk.img -o user/YOOO.bin ::YOOO.BIN
+
+user/hello_elf.elf: user/hello_elf.asm
+	nasm -f elf32 user/hello_elf.asm -o user/hello_elf.o
+	ld -m elf_i386 -N -o user/hello_elf.elf user/hello_elf.o
+	mcopy -i disk.img -o user/hello_elf.elf ::HELLO.ELF
 
 run:
 	qemu-system-i386 -boot d -cdrom CIndy-os.iso -drive file=disk.img,format=raw,index=0,media=disk

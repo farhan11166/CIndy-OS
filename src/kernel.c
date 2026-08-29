@@ -31,21 +31,14 @@ extern uint8_t stack_top[];
 uint32_t saved_kernel_esp = 0;
 volatile uint32_t syscall_exit_requested = 0;
 
-void syscall_handler() {
-    uint32_t eax;
-    asm volatile("mov %%eax, %0" : "=r"(eax));
-    debug_print("syscall_handler: eax=");
-    debug_print(eax == 0 ? "EXIT(0)" : "OTHER");
-    debug_print("\n");
+#include "../include/regs.h"
+#include "../include/syscall.h"
 
-    if (eax == 0) {
-        syscall_exit_requested = 1;
-        debug_print("-> exit syscall requested\n");
-        return;
-    }
-
-    syscall_exit_requested = 0;
+void syscall_handler(struct regs *r) {
+    /* delegate to syscall.c implementation */
+    handle_syscall(r);
 }
+
 
 void keyboard_handler() {
     unsigned char scancode = inb(0x60);

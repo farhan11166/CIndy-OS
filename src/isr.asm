@@ -116,7 +116,11 @@ isr33:
 isr128:
   cli
   pusha
+  ; pass pointer to the pushed register frame (ESP) as first arg to C handler
+  mov eax, esp
+  push eax
   call syscall_handler
+  add esp, 4
 
   mov eax, [syscall_exit_requested]
   cmp eax, 0

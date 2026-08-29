@@ -44,6 +44,29 @@ void init_paging() {
     asm volatile("mov %0, %%cr0" :: "r"(cr0));
 }
 
+int validate_user_region(uint32_t user_addr, uint32_t len) {
+    if (len == 0) return 1;
+    if (user_addr < 0x40000000u || user_addr >= 0xC0000000u) return 0;
+
+    uint32_t end = user_addr + len;
+    if (end < user_addr || end > 0xC0000000u) return 0;
+
+    for (uint32_t addr = user_addr; addr < end; addr += 0x1000u) {
+        uint32_t pd_index = addr >> 22;
+        uint32_t pt_index = (addr >> 12) & 0x3FFu;
+
+        if (pd_index >= 1024) return 0;
+        uint32_t pde = page_direc[pd_index];
+        if ((pde & 1u) == 0u) return 0;
+        uint32_t* page_table = (uint32_t*)(pde & 0xFFFFF000u);
+        uint32_t pte = page_table[pt_index];
+        if ((pte & 1u) == 0u) return 0;
+        if ((pte & 0x4u) == 0u) return 0; // user bit must be set
+    }
+
+    return 1;
+}
+
 void map_page(uint32_t physical_addr, uint32_t virtual_addr, uint32_t flags) {
     // Virtual address layout: [pd_index:10][pt_index:10][offset:12]
     uint32_t pd_index = virtual_addr >> 22;

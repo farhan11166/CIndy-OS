@@ -2,6 +2,19 @@
 
 A record of interesting bugs, hangs, and panics encountered during development, along with their root causes and solutions.
 
+## Current debugging focus
+
+At the current stage, the main issue is not a crashy kernel boot path anymore. The critical work is now architectural and focused on correctness, not just basic survival.
+
+The current known areas to watch are:
+- syscall return values and validation of user pointers
+- per-process memory ownership
+- file descriptor semantics for `open/read/write/close`
+- scheduler correctness once multiple processes exist
+- ELF runtime assumptions for real compiled user binaries
+
+The project is in a healthy place for this stage: the low-level machine bugs are mostly fixed, and the remaining work is more about OS design discipline than platform debug pain.
+
 ---
 
 ## 1. The CD-ROM IDE Polling Hang (FAT16 Implementation)

@@ -1,9 +1,15 @@
 [BITS 32]
 
-; Write 'X' with bright red on white (color 0x4F) to bottom-right corner
-; Row 24, Col 79 => offset = (24 * 80 + 79) * 2 = 3998 => 0xB8000 + 3998 = 0xB8F9E
-mov word [0xB8F9E], 0x4F58
+msg: db "HELLO FROM USER MODE!\n"
+msg_len equ $-msg
 
-; syscall 0 = exit, returns control to the kernel shell
+; SYS_WRITE: eax = 1, ebx = fd, ecx = pointer, edx = len
+mov eax, 1
+mov ebx, 1
+mov ecx, msg
+mov edx, msg_len
+int 0x80
+
+; SYS_EXIT: eax = 0
 mov eax, 0
 int 0x80

@@ -1,8 +1,18 @@
 # What I Learned Building CIndy-OS
 
-Building an operating system from scratch is notoriously difficult because you have no standard library, no memory manager, and no safety net. If a single pointer is wrong, the CPU halts. 
+Building an operating system from scratch is notoriously difficult because you have no standard library, no memory manager, and no safety net. If a single pointer is wrong, the CPU halts.
 
-This project forced me to understand exactly how software interacts with hardware at the lowest possible level. Here are the core concepts I mastered while building CIndy-OS:
+This project forced me to understand exactly how software interacts with hardware at the lowest possible level. The current kernel is no longer a bare prototype: it has stable boot, ring-3 transitions, a minimal syscall ABI, and an ELF-loading path. The important thing is that the project is now at a usable engineering checkpoint rather than a purely theoretical one.
+
+## Current state of understanding
+
+The core ideas that matter now are:
+- privilege transitions between ring 0 and ring 3 are delicate and require correct GDT/TSS and stack restoration
+- paging gives the kernel control of memory permissions and is the first foundation for user-mode isolation
+- syscalls are a clean boundary between kernel and user code
+- a process abstraction is the next major step after a stable syscall layer
+
+## Core concepts learned
 
 ## 1. Memory-Mapped I/O (VGA Text Buffer)
 Before you can even print "Hello World", you need a screen driver. I learned how to directly manipulate physical memory (`0xB8000`) to draw characters to the screen, manage cursor coordinates (`0x3D4` and `0x3D5` hardware ports), and handle manual screen scrolling in C.

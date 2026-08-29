@@ -7,28 +7,31 @@
 
 ---
 
-## Patch — August 2026 — GDT/TSS and Ring-3 Exit Fix
+## Patch — August 2026 — Syscall + ELF + Go-Forward Stability
 
-**Phase:** Stability + user-mode transition
+**Phase:** Minimal user-space foundation
 
-### ✅ What I Fixed
-- Corrected the TSS descriptor layout in the GDT so it is a valid 16-byte 32-bit TSS descriptor instead of an incomplete 8-byte entry.
-- Ensured the kernel saves the original ESP before jumping to ring 3 and restores it correctly on user-mode exit.
-- Removed the stale-stack bug where `int 0x80` returned through an `iret` path even after the kernel stack had already been restored.
-
-### 🐛 Root Cause
-The crash was a classic x86 privilege-transition bug:
-
-1. The TSS descriptor was malformed, so the CPU could not trust the TSS structure.
-2. The user-mode exit stub returned using the wrong stack state.
-3. The CPU then resumed with the wrong `ss:esp` or a stale stack frame, which triggered the page fault seen in the screenshots.
+### ✅ What I Completed
+- replaced the direct VGA write test with a proper syscall-based user program
+- added a basic syscall ABI: `exit`, `write`, `read`, `open`, `close`
+- tightened pointer validation so it checks actual mapped user pages instead of only trusting a fixed address window
+- added minimal ELF detection and a simple PT_LOAD loader for small user programs
+- updated project docs so the state of the OS is documented honestly
 
 ### 📚 What This Means
-This project now has a real understanding of:
-- GDT/TSS layout
-- ring transitions
-- privilege boundaries
-- the importance of saving/restoring kernel stack state during `iret`
+This project has moved past "kernel boots, but user mode is unstable" into a more realistic stage:
+- user programs can run in ring 3
+- a syscall boundary exists
+- the kernel can load and dispatch a basic user-space binary
+- the next big step is a process struct + cooperative scheduler
+
+### Next milestone
+The next project phase should not be a giant rewrite. The next step is small and focused:
+1. process structure / PCB
+2. a simple round-robin scheduler
+3. a proper syscall return convention
+4. better fd table behavior
+5. then real preemptive multitasking
 
 ---
 

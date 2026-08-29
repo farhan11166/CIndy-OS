@@ -1,54 +1,84 @@
 # 🖥️ CIndy-OS
 
-A bare-metal x86 hobby operating system that boots via GRUB, written from scratch in NASM assembly and C.
+A bare-metal x86 hobby operating system built from scratch in NASM and C. The project is intentionally small, explicit, and educational: each subsystem is implemented by hand so the kernel can be understood step by step.
 
 ---
 
-## 📸 What it does right now
+## What is working right now
 
-CIndy-OS is now a working bare-metal x86 kernel with a stable boot path, protected-mode memory setup, interrupt handling, and a user-mode transition path that no longer crashes on ring-3 entry/exit. The project is intentionally structured as a learning OS: each subsystem is small, understandable, and wired together by hand.
+CIndy-OS now has a stable protected-mode kernel with a working ring-3 transition path, a usable minimal syscall ABI, and a primitive ELF loader. The design is still intentionally simple, but it is already enough to load a user program, switch into ring 3, make syscalls, and return cleanly to the kernel.
 
-When booted, CIndy-OS initializes its own GDT, sets up the IDT, remaps the PIC, and provides a fully interactive environment:
+Current capabilities:
 
-1. **Hardware Interrupts**: Handles timer ticks (IRQ0) and keyboard input (IRQ1).
-2. **CPU Exceptions**: Catches all 32 CPU exceptions (Divide by Zero, Page Fault, etc.) preventing silent reboots.
-3. **Interactive Shell**: Command-line interface with an `argc/argv` parser.
-4. **Built-in Commands**: `help`, `about`, `version`, `timer`, `echo`, `meminfo`, `uptime`, `reboot`, `ls`, `cat`, `fat-ls`, `fat-cat`, `fat-write`, `run`, `read-test`, `write-test`
-5. **Physical Memory Manager**: Parses the GRUB Multiboot memory map; bitmap allocator tracks every 4 KB frame. Hardware-reserved regions (VGA buffer, BIOS ROM) are permanently marked used.
-6. **Virtual Memory / Paging**: Full x86 two-level page table. Identity-maps all of RAM (128 MB) so `map_page()` is safe to use at any time. `invlpg` flushes the TLB on every new mapping.
-7. **Program Loader**: `run <file.bin>` allocates a physical frame, maps it to virtual address `0x40000000`, loads a flat binary from the FAT16 disk directly into that address, and calls it as a function.
-8. **Read-Only File System**: USTAR Initial Ramdisk (initrd) loaded by GRUB, supports `ls` and `cat`.
-9. **FAT16 Read/Write Filesystem**: Full read and write support over the ATA PIO driver. `fat-ls`, `fat-cat`, `fat-write`.
-10. **ATA PIO Hard Drive Driver**: 28-bit LBA sector read/write to a virtual IDE disk.
+1. **Boot and protected mode**
+   - GRUB boots the kernel from ISO
+   - GDT and TSS are initialized and ring transitions are supported
+   - kernel enters protected mode and sets up a stable stack
 
-All output is written directly to the VGA text buffer at `0xB8000`. Input is processed from PS/2 port `0x60`.
+2. **Interrupts and exceptions**
+   - IDT is configured
+   - PIC is remapped
+   - IRQ0 and IRQ1 are handled
+   - CPU exceptions are caught without silently crashing
+
+3. **Kernel shell**
+   - command parser with `argc/argv`
+   - built-in shell commands such as `help`, `about`, `version`, `echo`, `ls`, `cat`, `meminfo`, `timer`, `uptime`, `run`, etc.
+
+4. **Memory and paging**
+   - PMM tracks physical frames via bitmap allocation
+   - paging is enabled with an identity map for the lower memory region
+   - page validation checks for user pages before allowing user-space access
+
+5. **Filesystem support**
+   - initrd/USTAR support for basic file listing and reading
+   - FAT16 disk access for file loading and writing
+
+6. **User-mode execution**
+   - kernel can load a program into a mapped virtual region and jump to ring 3
+   - a user program can execute in ring 3 and return to the kernel via a syscall exit path
+
+7. **Minimal syscall ABI**
+   - `SYS_EXIT`
+   - `SYS_WRITE`
+   - `SYS_READ`
+   - `SYS_OPEN`
+   - `SYS_CLOSE`
+   - current implementation is intentionally small and safe for the learning project stage
+
+8. **ELF loading**
+   - the `run` command detects ELF headers and loads PT_LOAD segments
+   - this is a minimal loader, not a full ELF runtime or relocator yet
 
 ---
 
-## 🗂️ Project Structure
+## Project structure
 
 ```
 CIndy-OS/
-├── src/                      # Core kernel source files
-│   ├── boot.asm              # Assembly entry point, Multiboot header, GDT setup
-│   ├── kernel.c              # Main kernel entry point (kernel_main)
-│   ├── screen.c              # VGA text buffer, printing, cursor, scrolling
-│   ├── ports.c               # Port I/O wrappers (inb, outb, inw, outw)
-│   ├── idt.c                 # Interrupt Descriptor Table setup
-│   ├── idt_load.asm          # Assembly routine to load IDT register (lidt)
-│   ├── isr.asm               # CPU exception handlers (ISR 0-31) + IRQ stubs
-│   ├── interrupts.asm        # enable_interrupts() wrapper (sti)
-│   ├── pic.c                 # 8259 PIC remapping
-│   ├── timer.c               # PIT driver + IRQ0 handler
-│   ├── keyboard.c            # PS/2 keyboard driver, shell, command dispatcher
-│   ├── memory.c              # Bump allocator (kmalloc/kmalloc_a) + bitmap PMM
-│   ├── paging.c              # x86 paging: init_paging(), map_page()
-│   ├── fs.c                  # USTAR archive filesystem driver (initrd)
-│   ├── fat16.c               # FAT16 read/write filesystem driver
-│   ├── string.c              # String utility functions (freestanding)
-│   └── ata.c                 # ATA PIO disk driver
-├── include/                  # Header files
-│   ├── types.h               # uint8_t, uint32_t, etc.
+├── src/
+│   ├── boot.asm              # entry point, multiboot header, early GDT setup
+│   ├── kernel.c              # main kernel logic, process of init and shell
+│   ├── screen.c              # VGA text output, cursor, scrolling
+│   ├── ports.c               # inb/outb wrappers
+│   ├── idt.c                 # IDT setup
+│   ├── idt_load.asm          # lidt helper
+│   ├── isr.asm               # ISR/IRQ stubs, syscall entry logic
+│   ├── interrupts.asm        # enable_interrupts()
+│   ├── pic.c                 # PIC remapping
+│   ├── timer.c               # PIT / timer tick logic
+│   ├── keyboard.c            # PS/2 keyboard, shell, run command, primitive ELF loader
+│   ├── memory.c              # kmalloc + PMM
+│   ├── paging.c              # page tables, user validation, map_page
+│   ├── fs.c                  # initrd / tar-like fs access
+│   ├── fat16.c               # FAT16 driver
+│   ├── string.c              # basic string functions
+│   ├── ata.c                 # ATA PIO disk access
+│   ├── gdt.c                 # GDT/TSS setup
+│   ├── syscall.c             # minimal syscall implementation
+│   └── usermode.asm          # ring-3 entry/exit helpers
+├── include/
+│   ├── types.h
 │   ├── screen.h
 │   ├── ports.h
 │   ├── idt.h
@@ -62,89 +92,111 @@ CIndy-OS/
 │   ├── fat16.h
 │   ├── string.h
 │   ├── ata.h
-│   └── multiboot.h           # Multiboot info structure
-├── user/                     # User-space programs (flat binaries)
-│   └── YOOO.asm              # Test program: writes 'X' to bottom-right VGA cell
-├── iso/                      # ISO boot configuration
+│   ├── multiboot.h
+│   ├── regs.h                # register frame definition for syscall handling
+│   └── syscall.h             # syscall numbers + prototypes
+├── user/
+│   ├── YOOO.asm              # simple user-mode test using SYS_WRITE + SYS_EXIT
+│   └── hello_elf.asm        # minimal ELF example
+├── iso/
 │   └── boot/
-│       ├── kernel.bin        # Compiled kernel (generated)
-│       ├── initrd.tar        # Initial ramdisk (generated)
+│       ├── kernel.bin        # generated kernel image
+│       ├── initrd.tar        # generated initrd
 │       └── grub/
-│           └── grub.cfg      # GRUB bootloader menu
-├── fs/                       # Files packed into initrd.tar
-├── disk.img                  # FAT16 formatted virtual hard disk
-├── linker.ld                 # Linker script — places kernel at 1 MiB
-├── Makefile                  # Build & run targets
-└── CIndy-os.iso              # Bootable ISO output (generated)
+│           └── grub.cfg      # boot config
+├── fs/
+│   └── files for initrd
+├── disk.img                  # FAT16 virtual disk
+├── linker.ld                 # kernel linker script
+├── Makefile                  # build + run targets
+├── recap.md                  # project recap / high-level workflow map
+├── docs/
+│   ├── LEARNING.md
+│   ├── INTERNALS.md
+│   ├── DEVLOG.md
+│   └── ERRORS.md
+├── README.md                 # this file
+├── CIndy-os.iso              # generated bootable ISO
+└── initrd.tar                # generated archive for boot
 ```
 
 ---
 
-## ⚙️ How It Works
+## The actual system design in one flow
 
-### Boot Flow
+### Boot flow
 
 ```
-BIOS/UEFI
-   ↓
-GRUB (reads CIndy-os.iso)
-   ↓ loads kernel.bin + initrd.tar as module
-searches for Multiboot header in .multiboot section
-   ↓
-jumps to start (boot.asm)
-   ↓
-   - Loads GDT (flat 32-bit protected mode)
-   - Sets up 16 KiB stack
-   ↓
-calls kernel_main() (kernel.c)
-   ↓
-   - Initializes IDT (32 exception handlers + timer + keyboard)
-   - Remaps PIC (IRQ 0-7 → vectors 32-39)
-   - Enables hardware interrupts
-   - Initializes PIT at 100 Hz
-   - Parses Multiboot memory map (init_memory)
-   - Initializes bitmap PMM (init_pmm) — only frees type-1 RAM regions
-   - Enables paging (identity-maps 128 MB)
-   - Loads initrd filesystem
-   - Initializes FAT16 driver
-   ↓
-enters interactive shell loop
-   ↓ (on halt)
-cli + hlt loop
+BIOS/UEFI -> GRUB -> kernel.bin -> boot.asm -> kernel_main()
 ```
 
-### Key Subsystems
+Kernel startup does:
+- set up GDT
+- set up IDT
+- remap PIC
+- initialize timer and keyboard
+- parse memory map
+- initialize PMM
+- enable paging
+- mount/initrd and FAT16
+- start shell loop
 
-#### Memory Management (`memory.c`)
-Two allocators work together:
+### User-mode flow
 
-- **Bump allocator** (`kmalloc` / `kmalloc_a`): used during early boot for kernel structures. `kmalloc_a` aligns to 4 KB page boundaries before allocating — required for page tables.
-- **Bitmap PMM** (`pmm_alloc_block` / `pmm_free_block`): tracks every 4 KB physical frame. Initialized by walking the GRUB memory map — only usable (type=1) regions are marked free. Hardware regions like the VGA buffer (`0xA0000`) and BIOS ROM (`0xF0000`) are never handed out.
-
-#### Paging (`paging.c`)
-- `init_paging()`: allocates one page directory and 32 page tables via `kmalloc_a`, creating an identity map of the entire first 128 MB of RAM (virtual == physical). Loads the directory into CR3 and sets CR0 bit 31 to enable the MMU.
-- `map_page(phys, virt, flags)`: maps a single 4 KB page. Safe to call at any time because the new page table frame allocated by `pmm_alloc_block()` is always within the 128 MB identity map. Calls `invlpg` to flush the TLB for the mapped address.
-
-#### Program Loader (`keyboard.c` — `run` command)
 ```
-run YOOO.BIN
-  ↓
-pmm_alloc_block()         → allocate one 4 KB physical frame
-map_page(phys, 0x40000000, 3)  → map it at virtual 0x40000000
-fat16_read_file(..., 0x40000000, 4096)  → load binary into mapped memory
-((void(*)())0x40000000)()  → call it as a function
+run <file>
+  -> read file from FAT16
+  -> detect flat binary or ELF
+  -> allocate user page(s)
+  -> map them in virtual memory
+  -> set up a user stack
+  -> jump_to_usermode(user_stack, entry)
+  -> user code executes in ring 3
+  -> int 0x80 triggers syscall
+  -> kernel handles it
+  -> SYS_EXIT restores kernel stack and returns to host C code
 ```
-The program must be a flat 32-bit binary that ends with `ret`. It runs in ring 0 with full access to hardware.
 
-#### FAT16 Driver (`fat16.c`)
-- Reads BPB from sector 0, calculates `fat_start_sector`, `root_dir_start`, `data_start_sector`.
-- `fat16_read_file(name8, ext3, buf, max_size)`: follows the FAT cluster chain, clamped to `max_size` to prevent buffer overflow.
-- `fat16_write_file`: scans the FAT for free clusters, links the chain, writes data sectors, creates a root directory entry.
-- `fat16_format_83`: converts a `"FILE.EXT"` string to the space-padded 8.3 format the FAT directory entry requires.
+This is the core learning path of the project: boot -> kernel -> memory -> paging -> user mode -> syscall -> back to kernel.
 
 ---
 
-## 🛠️ Build & Run
+## Minimal syscall model
+
+The current syscall layer is deliberately simple and intentionally small:
+
+- `eax` = syscall number
+- `ebx` = arg1
+- `ecx` = arg2
+- `edx` = arg3
+
+Supported minimal calls:
+- `SYS_EXIT` (0)
+- `SYS_WRITE` (1)
+- `SYS_READ` (4)
+- `SYS_OPEN` (2)
+- `SYS_CLOSE` (3)
+
+This is enough to support a basic user program that prints text and exits cleanly.
+
+---
+
+## Important limitations
+
+This project is not yet a full OS in the modern sense. It is still a learning OS. Important current limits:
+
+- no full scheduler yet
+- no per-process page directory switching
+- no true process descriptor table
+- no full user-space memory isolation beyond basic validation
+- `SYS_READ` and `SYS_OPEN` are still minimal stubs
+- ELF loading is minimal and does not yet do relocation-heavy advanced ELF handling
+
+This is okay and expected for the current phase.
+
+---
+
+## Build and run
 
 ### Prerequisites
 
@@ -158,69 +210,57 @@ sudo apt-get install -y nasm gcc grub-pc-bin grub-common xorriso mtools qemu-sys
 make
 ```
 
-The build pipeline:
-1. Assembles `*.asm` → `.o` object files
-2. Compiles `*.c` → `.o` object files (32-bit freestanding)
-3. Links everything with `linker.ld` → `kernel.bin`
-4. Assembles `user/YOOO.asm` → `user/YOOO.bin` (flat binary)
-5. Injects `YOOO.BIN` into `disk.img` via `mcopy`
-6. Packages kernel + initrd into `CIndy-os.iso` via `grub-mkrescue`
+Build steps:
+1. assemble assembly sources
+2. compile C sources with 32-bit freestanding flags
+3. link kernel.bin
+4. build test user programs
+5. place them into disk.img
+6. build ISO for booting
 
 ### Run
 
 ```bash
-make run          # QEMU with VGA display
-make run-curses   # QEMU with text-only (curses) display
-make run-debug    # QEMU headless, kernel output to stdout via port 0xE9
+make run
+make run-curses
+make run-debug
 ```
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
-### Completed ✅
-- [x] GDT — flat 32-bit protected mode
-- [x] IDT — 32 CPU exception handlers + hardware IRQs
-- [x] PIC remapping (IRQ 0-7 → vectors 32-39)
-- [x] PIT — hardware timer at 100 Hz
-- [x] PS/2 keyboard driver — scancode-to-ASCII, shift, caps lock
-- [x] Interactive shell — `argc/argv` command parser
-- [x] Multiboot memory map parsing
-- [x] Bump allocator (`kmalloc`, `kmalloc_a`)
-- [x] Bitmap Physical Memory Manager — only frees type-1 BIOS regions
-- [x] x86 Paging — full identity map of 128 MB, `map_page()` with TLB flush
-- [x] USTAR initrd filesystem (`ls`, `cat`)
-- [x] ATA PIO disk driver — 28-bit LBA read/write
-- [x] FAT16 filesystem — full read/write (`fat-ls`, `fat-cat`, `fat-write`)
-- [x] Program Loader — load and execute flat binaries from disk (`run`)
+### Completed
+- [x] GDT + protected mode
+- [x] TSS and ring-3 transition fix
+- [x] IDT and hardware interrupt setup
+- [x] keyboard + shell
+- [x] PMM and paging
+- [x] initrd / FAT16 support
+- [x] user-mode execution
+- [x] minimal syscall layer
+- [x] minimal ELF loader
 
-### Completed and Stabilized ✅
-- [x] **Protected-mode GDT + TSS** — valid 32-bit TSS descriptor, proper ring-3 transition setup
-- [x] **User-mode jump/return flow** — fixed stale-stack exit bug that caused page faults after `int 0x80`
-- [x] **Ring-3 test binary loading** — `run YOOO.BIN` now transitions into user mode on a mapped page and returns cleanly
-
-### Future Enhancements 🎯
-- [ ] **System Calls** — a cleaner, safer syscall ABI beyond the current exit stub
-- [ ] **Process Management** — context switching, process table, scheduler
-- [ ] **Dynamic Memory Allocator** — `malloc`/`free` with a free-list or buddy allocator
-- [ ] **Writable Extended FS** — subdirectories, file deletion
-- [ ] **Preemptive Multitasking** — timer-driven task switching
-- [ ] **ELF Loader** — load proper ELF executables instead of flat binaries
+### Next real milestones
+- [ ] per-process page directory model
+- [ ] real process structs / task state
+- [ ] cooperative scheduler
+- [ ] proper file descriptor table
+- [ ] richer syscall semantics and return values
+- [ ] preemptive multitasking
 
 ---
 
-## 🧠 Learning Resources
+## Learning resources
 
-- [OSDev Wiki](https://wiki.osdev.org/) — comprehensive OS development reference
+- [OSDev Wiki](https://wiki.osdev.org/)
 - [Multiboot Specification](https://www.gnu.org/software/grub/manual/multiboot/multiboot.html)
 - [NASM Documentation](https://nasm.us/doc/)
 - [James Molloy's Kernel Tutorial](http://www.jamesmolloy.co.uk/tutorial_html/)
-- [x86 Assembly Reference](https://www.felixcloutier.com/x86/)
-- [USTAR Format](https://www.gnu.org/software/tar/manual/tar.html#SEC141)
-- [FAT16 Specification](https://www.win.tue.nl/~aeb/linux/fs/fat/fat-1.html)
+- [x86 Instruction Reference](https://www.felixcloutier.com/x86/)
 
 ---
 
-## 📄 License
+## License
 
-Personal learning project. Do whatever you want with it.
+This is a personal learning project. Use and modify freely.
