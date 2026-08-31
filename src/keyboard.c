@@ -6,12 +6,12 @@
 #include "../include/timer.h"
 #include "../include/string.h"
 #include "../include/types.h"
+#include <stdint.h>
 #include "../include/ata.h"
 #include "../include/fat16.h"  
 #include "../include/paging.h" 
 #include "../include/gdt.h"
 extern volatile unsigned int timer_ticks;
-extern uint8_t stack_top[];
 extern uint32_t saved_kernel_esp;
 
 struct elf32_ehdr {
@@ -42,7 +42,7 @@ struct elf32_phdr {
     uint32_t p_align;
 };
 
-static int load_elf_program(const uint8_t *file_buf, uint32_t file_size, uint32_t *entry_out) {
+int load_elf_program(const uint8_t *file_buf, uint32_t file_size, uint32_t *entry_out) {
     if (file_size < 52) return -1;
     if (file_buf[0] != 0x7F || file_buf[1] != 'E' || file_buf[2] != 'L' || file_buf[3] != 'F') return -1;
 
@@ -51,33 +51,79 @@ static int load_elf_program(const uint8_t *file_buf, uint32_t file_size, uint32_
     if (ehdr->e_phnum == 0) return -1;
     if (ehdr->e_phoff + (ehdr->e_phnum * ehdr->e_phentsize) > file_size) return -1;
 
+    /* HELLO.ELF is a non-PIC ET_EXEC linked at 0x08048060. Copy segments to
+     * their p_vaddr (page-aligned maps) so immediates like `msg` stay valid. */
     *entry_out = ehdr->e_entry;
+    // agent_dbg("A", "keyboard.c:load_elf", "e_entry", ehdr->e_entry, ehdr->e_phnum, ehdr->e_phoff, 0);
 
     for (uint16_t i = 0; i < ehdr->e_phnum; ++i) {
         const struct elf32_phdr *ph = (const struct elf32_phdr *)(file_buf + ehdr->e_phoff + (i * ehdr->e_phentsize));
         if (ph->p_type != 1u) continue; // PT_LOAD
-        if (ph->p_vaddr == 0) continue;
+        if (ph->p_memsz == 0) continue;
+        if (ph->p_offset + ph->p_filesz > file_size) return -1;
 
-        uint32_t segment_pages = (ph->p_memsz + 4095u) / 4096u;
-        for (uint32_t page = 0; page < segment_pages; ++page) {
-            uint32_t vaddr = ph->p_vaddr + (page * 4096u);
-            uint32_t phys = pmm_alloc_block();
-            if (phys == 0) return -1;
-            map_page(phys, vaddr, 7u);
+        /* Snapshot the phdr values we need before touching any memory that
+         * might alias file_buf.  The pmm_alloc_block() call below can return
+         * the same physical frame that the kmalloc_a() bump allocator already
+         * handed to the caller for file_buf, because kmalloc_a() does not
+         * update the PMM bitmap.  We must not memset() a mapped vaddr until
+         * after we have finished reading all phdr fields and copied the
+         * segment data, otherwise the memset() would zero file_buf in-place
+         * and corrupt both the segment data and the remaining phdrs. */
+        uint32_t seg_vaddr   = ph->p_vaddr;
+        uint32_t seg_offset  = ph->p_offset;
+        uint32_t seg_filesz  = ph->p_filesz;
+        uint32_t seg_memsz   = ph->p_memsz;
+
+        uint32_t map_start = seg_vaddr & ~0xFFFu;
+        uint32_t map_end = (seg_vaddr + seg_memsz + 0xFFFu) & ~0xFFFu;
+        for (uint32_t vaddr = map_start; vaddr < map_end; vaddr += 4096u) {
+            if ((get_pte(vaddr) & 1u) == 0u) {
+                uint32_t phys = pmm_alloc_block();
+                if (phys == 0) return -1;
+                map_page(phys, vaddr, 7u);
+                /* Do NOT memset here — file_buf may share this physical frame
+                 * (pmm_alloc_block returns frames that kmalloc_a already gave
+                 * out, because kmalloc_a does not register in the PMM bitmap).
+                 * Zero only the BSS tail after copying the segment below. */
+            }
+            // agent_dbg("B", "keyboard.c:load_elf", "mapped_page", vaddr, seg_vaddr, get_pte(vaddr), seg_memsz);
+            // print("ELF load: mapped page vaddr 0x"); print_hex(vaddr); print("\n");
         }
 
-        uint32_t copy_len = ph->p_filesz;
-        if (copy_len > ph->p_memsz) copy_len = ph->p_memsz;
+        /* Copy segment data first, THEN zero the BSS tail. */
+        uint32_t copy_len = seg_filesz;
+        if (copy_len > seg_memsz) copy_len = seg_memsz;
         if (copy_len > 0) {
-            uint8_t *dest = (uint8_t *)ph->p_vaddr;
-            const uint8_t *src = file_buf + ph->p_offset;
+            uint8_t *dest = (uint8_t *)seg_vaddr;
+            const uint8_t *src = file_buf + seg_offset;
+            // print("ELF copy: dest=0x"); print_hex((uint32_t)dest); print(" len=0x"); print_hex(copy_len); print("\n");
             memcpy(dest, src, copy_len);
         }
-        if (ph->p_memsz > ph->p_filesz) {
-            memset((void *)(ph->p_vaddr + ph->p_filesz), 0, ph->p_memsz - ph->p_filesz);
+        if (seg_memsz > seg_filesz) {
+            memset((void *)(seg_vaddr + seg_filesz), 0, seg_memsz - seg_filesz);
         }
     }
     return 0;
+}
+
+void enter_user_program(uint32_t user_entry) {
+    uint32_t stack_phys = pmm_alloc_block();
+    if (stack_phys == 0) {
+        print("run: out of physical memory for user stack\n");
+        return;
+    }
+    map_page(stack_phys, 0x80000000u, 7u);
+    memset((void *)0x80000000u, 0, 4096u);
+    uint32_t user_stack_top = 0x80000FFCu;
+
+    // agent_dbg("D", "keyboard.c:enter_user", "entry_stack_ptes", user_entry, user_stack_top, get_pte(user_entry), get_pte(0x80000000u));
+
+    print("jumping to ring 3 at 0x");
+    print_hex(user_entry);
+    print("...\n");
+    jump_to_usermode(user_stack_top, user_entry);
+    print("Program exited.\n");
 }
 
 uint8_t shift_pressed = 0;
@@ -275,47 +321,60 @@ void execute_command(){
             if (argc < 2) {
                 print("Usage: run <filename.ext>\n");
             } else {
-                uint32_t phy_block = pmm_alloc_block();
-                if (phy_block == 0) {
-                    print("run: out of physical memory\n");
-                } else {
-                    map_page(phy_block, 0x40000000, 7); // present + R/W + user
-                    char name8[9], ext3[4];
-                    fat16_format_83(argv[1], name8, ext3);
+                /* Reuse the same logic used by auto_run_hello: read into kernel
+                 * buffer and then load and map the ELF. */
+                char name8[9], ext3[4];
+                fat16_format_83(argv[1], name8, ext3);
 
-                    int result = fat16_read_file(name8, ext3, (uint8_t*)0x40000000, 4096);
-                    if (result < 0) {
-                        print("run: failed to load file\n");
-                    } else {
-                        uint32_t user_entry = 0x40000000;
-                        const uint8_t *img = (const uint8_t *)0x40000000;
-                        if (img[0] == 0x7F && img[1] == 'E' && img[2] == 'L' && img[3] == 'F') {
-                            if (load_elf_program(img, (uint32_t)result, &user_entry) < 0) {
-                                print("run: invalid ELF image\n");
-                                return;
-                            }
-                        }
-
-                        uint32_t user_stack_phys = pmm_alloc_block();
-                        map_page(user_stack_phys, 0x80000000, 7); // present + R/W + user
-                        uint32_t user_stack_top = 0x80000FFC; // within the mapped page
-
-                        print("Loaded ");
-                        print_int(result);
-                        print(" bytes, jumping to ring 3 at 0x");
-                        print_hex(user_entry);
-                        print("...\n");
-                        tss_set_kernel_stack((uint32_t)&stack_top);
-                        debug_print("about to call jump_to_usermode\n");
-                        jump_to_usermode(user_stack_top, user_entry);
-                        debug_print("jump_to_usermode returned\n");
-                        /* kernel_return() in usermode.asm resumes here on exit syscall */
-                        print("Program exited.\n");
-                    }
+                uint8_t *tmp_buf = (uint8_t*)kmalloc_a(4096);
+                if (!tmp_buf) {
+                    print("run: kmalloc failed\n");
+                    return;
                 }
+
+                int result = fat16_read_file(name8, ext3, tmp_buf, 4096);
+                if (result < 0) {
+                    print("run: failed to load file\n");
+                } else {
+                    uint32_t user_entry = 0;
+                    const uint8_t *img = (const uint8_t *)tmp_buf;
+                    if (img[0] == 0x7F && img[1] == 'E' && img[2] == 'L' && img[3] == 'F') {
+                        if (load_elf_program(img, (uint32_t)result, &user_entry) < 0) {
+                            print("run: invalid ELF image\n");
+                            return;
+                        }
+                        // agent_dbg("A", "keyboard.c:run", "elf_loaded", user_entry, get_pte(user_entry), get_pte(0x08048060u), get_pte(0x40001000u));
+                    } else {
+                        uint32_t phys = pmm_alloc_block();
+                        if (phys == 0) {
+                            print("run: out of physical memory\n");
+                            return;
+                        }
+                        map_page(phys, 0x40000000u, 7u);
+                        /* Copy the binary first, THEN zero any remaining bytes.
+                         * Do NOT memset the whole page before memcpy — tmp_buf
+                         * is from kmalloc_a and pmm_alloc_block() may have
+                         * returned the same frame (even with the pmm_mark_used
+                         * fix this ordering is safer and more correct). */
+                        memcpy((void *)0x40000000u, img, (uint32_t)result);
+                        if ((uint32_t)result < 4096u) {
+                            memset((void *)(0x40000000u + (uint32_t)result), 0,
+                                   4096u - (uint32_t)result);
+                        }
+                        user_entry = 0x40000000u;
+                        print("run: flat binary loaded at 0x40000000\n");
+                    }
+
+                    print("Loaded ");
+                    print_int(result);
+                    print(" bytes, jumping to entry 0x");
+                    print_hex(user_entry);
+                    print("...\n");
+                    enter_user_program(user_entry);
+                }
+                // tmp_buf is kernel-allocated; no free routine available — leak is acceptable for now in this toy OS
             }
-        }
-        else{
+        }        else{
             print("Unknown command: ");
             print(argv[0]);
         }

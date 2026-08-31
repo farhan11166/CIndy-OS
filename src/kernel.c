@@ -30,6 +30,7 @@ extern uint8_t stack_top[];
 /* saved by jump_to_usermode before iret — restored by kernel_return */
 uint32_t saved_kernel_esp = 0;
 volatile uint32_t syscall_exit_requested = 0;
+volatile int syscall_kernel_fallback = 0; /* set to 1 when running user code in kernel context */
 
 #include "../include/regs.h"
 #include "../include/syscall.h"
@@ -47,6 +48,9 @@ void keyboard_handler() {
 }
 
 void kernel_main(unsigned int magic, struct multiboot_info* mbd) {
+
+    /* Initialize serial early so -nographic + -serial stdio captures kernel output */
+    init_serial();
 
     clear_screen();
     enable_cursor(14, 15);
@@ -145,7 +149,7 @@ void kernel_main(unsigned int magic, struct multiboot_info* mbd) {
 
     print("Interrupts enabled.\n");
     print_colored("\n[CIndy-OS]> ", 0x0B);
-    
+
     while(1){
         asm volatile("hlt");
     }

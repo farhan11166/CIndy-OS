@@ -68,7 +68,13 @@ void* kmalloc_a(unsigned int size) {
     void* ptr = (void*)free_mem_addr;
     free_mem_addr += size;
     allocated_memory += size;
-    
+
+    /* Keep the PMM bitmap in sync so that pmm_alloc_block() never hands out
+     * a frame that kmalloc_a() already owns.  Safe to call even before
+     * init_pmm() has run — it will re-mark these frames during its own
+     * kernel_frames pass. */
+    pmm_mark_used((uint32_t)ptr, size);
+
     return ptr;
 }
 
@@ -151,6 +157,18 @@ void pmm_free_block(uint32_t p_addr) {
     uint32_t frame = p_addr / 4096;
     pmm_clear_bit(frame);
     allocated_memory -= 4096;
+}
+
+void pmm_mark_used(uint32_t phys_addr, uint32_t size) {
+    /* Mark every 4KB frame that overlaps [phys_addr, phys_addr+size) as used.
+     * Safe to call before init_pmm() runs — the bitmap is zeroed at that point
+     * so setting bits is a no-op that init_pmm will re-apply. */
+    if (size == 0) return;
+    uint32_t first_frame = phys_addr / 4096;
+    uint32_t last_frame  = (phys_addr + size - 1) / 4096;
+    for (uint32_t i = first_frame; i <= last_frame; i++) {
+        pmm_set_bit(i);
+    }
 }
 
 unsigned get_total_memory(){return total_memory;}

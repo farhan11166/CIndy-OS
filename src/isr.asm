@@ -7,6 +7,7 @@ extern fault_handler
 extern syscall_handler
 extern saved_kernel_esp
 extern syscall_exit_requested
+extern kernel_return
 
 section .text
 bits 32
@@ -126,11 +127,10 @@ isr128:
   cmp eax, 0
   je .resume_interrupt
 
-  ; User-space exit syscall: restore the kernel stack that was saved before
-  ; jump_to_usermode(), then return directly to the kernel call site instead of
-  ; doing an iret on a stale user stack frame.
-  mov esp, [saved_kernel_esp]
-  ret
+  mov eax, [saved_kernel_esp]
+  mov dword [syscall_exit_requested], 0
+  mov esp, eax
+  jmp kernel_return
 
 .resume_interrupt:
   popa

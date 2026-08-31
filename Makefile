@@ -1,4 +1,8 @@
-all: user/YOOO.bin user/hello_elf.elf
+DISK_IMG := disk.img
+
+.PHONY: all clean run run-curses run-debug
+
+all: $(DISK_IMG) user/YOOO.bin user/hello_elf.elf
 	nasm -f elf32 src/boot.asm -o boot.o
 	nasm -f elf32 src/idt_load.asm -o idt_load.o
 	nasm -f elf32 src/isr.asm -o isr.o
@@ -22,7 +26,10 @@ all: user/YOOO.bin user/hello_elf.elf
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/gdt.c -o gdt.o
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/syscall.c -o syscall.o
 
-	ld -m elf_i386 -T linker.ld -o kernel.bin boot.o kernel.o screen.o ports.o idt.o pic.o isr.o idt_load.o interrupts.o keyboard.o timer.o string.o memory.o fs.o ata.o fat16.o paging.o gdt.o syscall.o gdt_flush.o usermode.o
+	ld -m elf_i386 -T linker.ld -o kernel.bin \
+    boot.o kernel.o screen.o ports.o idt.o pic.o isr.o idt_load.o interrupts.o \
+    keyboard.o timer.o string.o memory.o fs.o ata.o fat16.o paging.o gdt.o \
+    syscall.o gdt_flush.o usermode.o
 
 	cp kernel.bin iso/boot/kernel.bin
 	cd fs && tar -cvf ../initrd.tar *
@@ -30,20 +37,29 @@ all: user/YOOO.bin user/hello_elf.elf
 
 	grub-mkrescue -o CIndy-os.iso iso
 
-user/YOOO.bin: user/YOOO.asm
-	nasm -f bin user/YOOO.asm -o user/YOOO.bin
-	mcopy -i disk.img -o user/YOOO.bin ::YOOO.BIN
+clean:
+	rm -f *.o *.bin *.iso initrd.tar
+	rm -f user/*.bin user/*.elf user/*.o
+	rm -f iso/boot/kernel.bin iso/boot/initrd.tar
+$(DISK_IMG):
+	@rm -f $@
+	@truncate -s 20M $@
+	@mkfs.fat -F 16 $@
 
-user/hello_elf.elf: user/hello_elf.asm
+user/YOOO.bin: user/YOOO.asm $(DISK_IMG)
+	nasm -f bin user/YOOO.asm -o user/YOOO.bin
+	mcopy -i $(DISK_IMG) -o user/YOOO.bin ::YOOO.BIN
+
+user/hello_elf.elf: user/hello_elf.asm $(DISK_IMG)
 	nasm -f elf32 user/hello_elf.asm -o user/hello_elf.o
 	ld -m elf_i386 -N -o user/hello_elf.elf user/hello_elf.o
-	mcopy -i disk.img -o user/hello_elf.elf ::HELLO.ELF
+	mcopy -i $(DISK_IMG) -o user/hello_elf.elf ::HELLO.ELF
 
-run:
-	qemu-system-i386 -boot d -cdrom CIndy-os.iso -drive file=disk.img,format=raw,index=0,media=disk
+run: $(DISK_IMG)
+	qemu-system-i386 -boot d -cdrom CIndy-os.iso -drive file=$(DISK_IMG),format=raw,index=0,media=disk
 
-run-curses:
-	qemu-system-i386 -display curses -cdrom CIndy-os.iso -drive file=disk.img,format=raw,index=0,media=disk
+run-curses: $(DISK_IMG)
+	qemu-system-i386 -boot d -display curses -cdrom CIndy-os.iso -drive file=$(DISK_IMG),format=raw,index=0,media=disk
 
-run-debug:
-	qemu-system-i386 -display none -debugcon stdio -global isa-debugcon.iobase=0xe9 -cdrom CIndy-os.iso -drive file=disk.img,format=raw,index=0,media=disk
+run-debug: $(DISK_IMG)
+	qemu-system-i386 -boot d -display none -debugcon stdio -global isa-debugcon.iobase=0xe9 -cdrom CIndy-os.iso -drive file=$(DISK_IMG),format=raw,index=0,media=disk

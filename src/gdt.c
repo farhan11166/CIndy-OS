@@ -41,15 +41,20 @@ static void memset_tss(void){
 
  void gdt_init_tss(uint32_t kernel_stack_top) {
       memset_tss();
-  
+
       tss.ss0        = KERNEL_DATA_SEG;
       tss.esp0       = kernel_stack_top;
-      tss.iomap_base = sizeof(tss); /* no I/O permission bitmap */
-  
-      write_tss_descriptor((uint32_t)&tss, sizeof(tss) - 1);
-  
-      tss_flush(TSS_SEG);
-  }
+     tss.cs         = KERNEL_CODE_SEG;
+     tss.ds         = KERNEL_DATA_SEG;
+     tss.es         = KERNEL_DATA_SEG;
+     tss.fs         = KERNEL_DATA_SEG;
+     tss.gs         = KERNEL_DATA_SEG;
+     tss.ss         = KERNEL_DATA_SEG;
+     tss.iomap_base = sizeof(tss); /* no I/O permission bitmap */
+
+     write_tss_descriptor((uint32_t)&tss, sizeof(tss) - 1);
+     tss_flush(TSS_SEG);
+ }
 
  void tss_set_kernel_stack(uint32_t kernel_stack_top) {
       tss.esp0 = kernel_stack_top;

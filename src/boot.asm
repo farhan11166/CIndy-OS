@@ -30,6 +30,12 @@ bits 32
 
 start:
     cli
+    ; GRUB passes the multiboot magic in EAX and the info pointer in EBX.
+    ; We must preserve those values before we reload segment registers or touch
+    ; EAX/EBX in the setup below.
+    mov esi, eax
+    mov edi, ebx
+
     lgdt [gdt_descriptor]
     jmp KERNEL_CODE_SEG:flush_segments
 
@@ -42,8 +48,8 @@ flush_segments:
     mov ss, ax
 
     mov esp, stack_top  ; set up stack before doing anything
-    push ebx;
-    push eax;
+    push edi
+    push esi
     call kernel_main
 
 hang:

@@ -595,3 +595,34 @@ Audited the entire codebase and fixed the highest-priority bugs.
 | 11 | FAT16 Filesystem Driver | ✅ Done |
 | 12 | Program Loader (Exec) | ✅ Done |
 | 13 | Bug Fixes & Hardening | ✅ Done |
+
+---
+
+## Patch — 2026-08-31 — PMM Frame Aliasing Fix
+
+**Phase:** User-mode stability
+
+### Problem
+`run YOOO.BIN` always page-faulted at `0x40001000` in ring 3.  The binary never
+executed a single real instruction.
+
+### Root Cause Found
+`kmalloc_a` and `pmm_alloc_block` were not in sync.  The PMM bitmap only knew about
+allocations up to the `free_mem_addr` value when `init_pmm` ran at boot.  Every
+`kmalloc_a` call after boot produced a "ghost" allocation invisible to the PMM.
+The file-read buffer for the binary and the user page frame ended up at the same
+physical address.  `memset` of the mapped user page zeroed the source buffer before
+`memcpy` could read it, so the user page was filled with zeros.
+
+### Fix
+- Added `pmm_mark_used(phys, size)` and hooked it into `kmalloc_a` so bump and bitmap
+  allocators stay permanently in sync.
+- Fixed `memcpy`-before-`memset` ordering in the flat binary load path.
+
+### Lesson
+Two allocators sharing physical memory must share the same tracking state.  The
+bump allocator was a fast kernel-init tool that was never designed to coexist with the
+PMM at runtime.  The fix makes `kmalloc_a` a thin wrapper that also registers with the
+PMM, keeping the kernel's two allocation paths consistent.
+
+See `docs/BUGREPORT_PMM_FRAME_ALIAS.md` for full analysis.

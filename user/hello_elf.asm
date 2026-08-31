@@ -16,5 +16,5 @@ _start:
     int 0x80
 
 section .rodata
-msg: db "Hello from ELF user mode!\n", 0
+msg: db "Hello from ELF user mode!", 0x0A, 0
 msg_len equ $ - msg

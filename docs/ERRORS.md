@@ -138,3 +138,45 @@ There were two separate but related bugs:
 - Restored that saved kernel stack before returning to the kernel call site instead of reusing the user stack frame.
 
 This is the final fix that made the user-mode transition path stable instead of crashing on the first ring switch.
+
+---
+
+## 7. Page Fault at `0x40001000` After `run YOOO.BIN` (PMM / kmalloc_a Frame Aliasing)
+
+**Symptoms:**
+`run YOOO.BIN` loaded the binary, jumped to ring 3, and immediately faulted:
+```
+EXCEPTION: Page Fault
+  EIP: 0X40001000   CS: 0X0000001B
+  CR2 (fault addr): 0X40001000
+  Cause: not present, read, user mode
+```
+Only one page was ever mapped for the binary (`0x40000000`), so a fault at the second
+page (`0x40001000`) looked impossible — the binary is only 53 bytes.
+
+**Root Cause:**
+`kmalloc_a` uses a bump allocator.  `init_pmm` marks frames used only up to
+`free_mem_addr` *at boot time*.  Any `kmalloc_a` call that happens later (at runtime,
+e.g. inside the `run` command) advances `free_mem_addr` without telling the PMM bitmap.
+`pmm_alloc_block()` therefore treats those frames as free and hands them out again.
+
+In the `run` command this produced the following collision:
+- `kmalloc_a(4096)` for `tmp_buf` took frame F.
+- YOOO.bin was read into `tmp_buf` at frame F.
+- `pmm_alloc_block()` for the user page also returned frame F (PMM thought it was free).
+- `map_page` mapped vaddr `0x40000000` → phys F.
+- `memset((void*)0x40000000, 0, 4096)` zeroed phys F — destroying `tmp_buf`.
+- `memcpy((void*)0x40000000, img, 53)` copied 53 zero bytes — no valid code.
+- The CPU entered ring 3, executed `0x00 0x00` bytes, and crashed.
+- The fault appeared at `0x40001000` specifically because the TLB had cached the
+  mapping for page 0 (`invlpg` at `map_page` time), so page 0 was accessible, but
+  page 1 caused a TLB miss → page-table walk → PTE not present → fault.
+
+**Fix:**
+1. Added `pmm_mark_used(phys, size)` in `src/memory.c` / `include/memory.h`.
+2. `kmalloc_a` now calls `pmm_mark_used` on every allocation, keeping the PMM bitmap
+   permanently in sync with the bump allocator.
+3. Changed the flat binary load order in `keyboard.c`: `memcpy` the binary first, then
+   `memset` only the tail, so the source is never destroyed before the copy finishes.
+
+Full analysis: `docs/BUGREPORT_PMM_FRAME_ALIAS.md`

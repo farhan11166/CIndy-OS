@@ -52,6 +52,7 @@ void fault_handler(struct registers *regs) {
             asm volatile("mov %%cr2, %0" : "=r"(cr2));
             print("  CR2 (fault addr): "); print_hex(cr2);
             print("\n");
+            // agent_dbg("B", "idt.c:fault_handler", "page_fault", cr2, regs->eip, regs->err_code, regs->cs);
 
             // Decode error code bits
             print("  Cause: ");

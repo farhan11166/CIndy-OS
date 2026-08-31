@@ -10,7 +10,11 @@ void scroll_screen();
 void print_colored(const char* message, unsigned char color);
 void update_cursor();
 void enable_cursor(unsigned char cursor_start, unsigned char cursor_end);
+void init_serial(void);
 void debug_print(const char* str);
-
+/* agent_dbg — commented out, uncomment alongside screen.c implementation when needed
+void agent_dbg(const char *hid, const char *loc, const char *msg,
+               unsigned int a, unsigned int b, unsigned int c, unsigned int d);
+*/
 
 #endif

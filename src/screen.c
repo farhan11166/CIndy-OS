@@ -9,7 +9,14 @@ int cursor_col=0;
 #define MAX_COLS 80
 
 static void debug_putc(char c) {
+    /* Write to QEMU debug port (0xE9) for legacy debug output, and also
+     * to COM1 (0x3F8) after ensuring the transmit buffer is empty so that
+     * -serial stdio will capture kernel prints. */
     __asm__ volatile("outb %0, $0xE9" : : "a"(c));
+
+    /* Wait for Transmitter Holding Register empty */
+    while ((inb(0x3F8 + 5) & 0x20) == 0) { /* spin */ }
+    outb(0x3F8, (unsigned char)c);
 }
 
 void debug_print(const char* str) {
@@ -17,6 +24,49 @@ void debug_print(const char* str) {
         debug_putc(*str);
         str++;
     }
+}
+
+/* agent_dbg infrastructure — kept for future debugging sessions, normally unused.
+static void agent_debug_hex(unsigned int num) {
+    const char *hex_chars = "0123456789ABCDEF";
+    debug_print("0x");
+    for (int i = 28; i >= 0; i -= 4) {
+        char s[2];
+        s[0] = hex_chars[(num >> i) & 0xF];
+        s[1] = '\0';
+        debug_print(s);
+    }
+}
+
+void agent_dbg(const char *hid, const char *loc, const char *msg,
+               unsigned int a, unsigned int b, unsigned int c, unsigned int d) {
+    debug_print("\n{\"sessionId\":\"78964b\",\"hypothesisId\":\"");
+    debug_print(hid);
+    debug_print("\",\"location\":\"");
+    debug_print(loc);
+    debug_print("\",\"message\":\"");
+    debug_print(msg);
+    debug_print("\",\"data\":{\"a\":\"");
+    agent_debug_hex(a);
+    debug_print("\",\"b\":\"");
+    agent_debug_hex(b);
+    debug_print("\",\"c\":\"");
+    agent_debug_hex(c);
+    debug_print("\",\"d\":\"");
+    agent_debug_hex(d);
+    debug_print("\"}}\n");
+}
+*/
+
+void init_serial(void) {
+    /* Initialize COM1 (0x3F8) to 115200 baud, 8N1 */
+    outb(0x3F8 + 1, 0x00);    /* Disable all interrupts */
+    outb(0x3F8 + 3, 0x80);    /* Enable DLAB (set baud divisor) */
+    outb(0x3F8 + 0, 0x01);    /* Divisor low byte (1) for 115200 baud */
+    outb(0x3F8 + 1, 0x00);    /* Divisor high byte */
+    outb(0x3F8 + 3, 0x03);    /* 8 bits, no parity, one stop bit */
+    outb(0x3F8 + 2, 0xC7);    /* Enable FIFO, clear them, with 14-byte threshold */
+    outb(0x3F8 + 4, 0x0B);    /* IRQs enabled, RTS/DSR set */
 }
 
 void clear_screen(){
