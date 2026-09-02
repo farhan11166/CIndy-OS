@@ -26,6 +26,36 @@ To prevent the OS from silently rebooting on errors (like a Divide by Zero), I b
 - Push error codes to the stack.
 - Route them to a generic C `fault_handler()` to create a "Blue Screen of Death" for debugging.
 
+### Syscall & Interrupt Calling Convention (summary)
+The project uses a single, consistent register-frame layout for interrupts, exceptions, and syscalls. Important points to remember when working in the kernel or editing the syscall path:
+
+- Syscall entry: `int 0x80` handled by the assembly stub `isr128` in `src/isr.asm`.
+  - `isr128` sequence: `cli`, `pusha`, push pointer-to-frame (ESP), `call syscall_handler` (C), then restore/pop and `iret` (or a kernel-return path if `syscall_exit_requested` is set).
+  - The C handler receives `struct registers *` pointing at the pushed frame on the stack.
+
+- Register-frame layout (see `include/idt.h`) — fields in order:
+  - `uint32_t ds;`
+  - `uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;`
+  - `uint32_t int_no, err_code;`
+  - `uint32_t eip, cs, eflags, useresp, ss;`
+
+- Syscall ABI used by user programs:
+  - Syscall number: EAX
+  - Arguments: EBX, ECX, EDX
+  - Return: EAX (set by handler)
+
+- copy_from_user / copy_to_user exist in `src/syscall.c` and call `validate_user_region()` (paging-based checks) to validate pointers before copying.
+- There is a temporary testing shim `syscall_kernel_fallback` that disables user-pointer copying for kernel-mode testing; plan to remove this once ring-3 execution is stable.
+
+- Page faults and exceptions use the same `struct registers` layout; the page-fault handler in `src/idt.c` reads CR2 and decodes the error code to help debug not-present vs protection faults.
+
+Developer notes (quick):
+- Keep `struct registers` and assembly stubs in sync if editing either side.
+- Prefer page-table-based pointer validation (validate_user_region) over address-range heuristics.
+- When moving to per-process CR3 switching later, ensure syscall/ISR paths preserve/restore CR3 appropriately and that `useresp`/`ss` fields are valid for ring transitions.
+
+(For a longer writeup, see docs/SYSCALLS.md — or I can merge that text into this file if you prefer no new docs file.)
+
 ## 4. Port I/O and PIC Remapping
 To get keyboard input, I had to communicate with the Programmable Interrupt Controller (PIC). I learned how to use `inb` and `outb` port I/O to remap IRQs so they didn't collide with CPU exceptions, enabling the OS to safely receive hardware interrupts from the timer and keyboard.
 
