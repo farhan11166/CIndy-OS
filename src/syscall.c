@@ -4,14 +4,19 @@
 
 extern volatile uint32_t syscall_exit_requested;
 volatile uint32_t last_exit_status = 0;
+extern volatile uint32_t syscall_kernel_fallback;
+
+
 
 int validate_user_ptr(const void *ptr, uint32_t len) {
     if (!ptr) return 0;
+    if(syscall_kernel_fallback) return 1;
     uint32_t p = (uint32_t)ptr;
     return validate_user_region(p, len);
 }
 
 int copy_from_user(void *dst, const void *user_src, uint32_t len) {
+    if(!dst || !user_src) return -1;
     if (!validate_user_ptr(user_src, len)) return -1;
     char *d = (char *)dst;
     const char *s = (const char *)user_src;
@@ -20,6 +25,7 @@ int copy_from_user(void *dst, const void *user_src, uint32_t len) {
 }
 
 int copy_to_user(void *user_dst, const void *src, uint32_t len) {
+    if(!user_dst || !src) return -1;
     if (!validate_user_ptr(user_dst, len)) return -1;
     char *d = (char *)user_dst;
     const char *s = (const char *)src;
@@ -27,7 +33,6 @@ int copy_to_user(void *user_dst, const void *src, uint32_t len) {
     return 0;
 }
 
-extern volatile int syscall_kernel_fallback;
 
 void handle_syscall(struct regs *r) {
     uint32_t num = r->eax;

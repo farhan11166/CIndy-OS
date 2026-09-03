@@ -11,6 +11,7 @@
 #include "../include/fat16.h"
 #include "../include/paging.h"
 #include  "../include/gdt.h"
+#include "../include/process.h"
 extern void isr0(); extern void isr1(); extern void isr2(); extern void isr3();
 extern void isr4(); extern void isr5(); extern void isr6(); extern void isr7();
 extern void isr8(); extern void isr9(); extern void isr10(); extern void isr11();
@@ -39,7 +40,21 @@ void syscall_handler(struct regs *r) {
     /* delegate to syscall.c implementation */
     handle_syscall(r);
 }
+static void start_init_proc(void){
+    static struct process initial_proc;
 
+    initial_proc.pid = 1;
+    initial_proc.state = PROC_NEW;
+    initial_proc.entry = 0x40000000;
+    initial_proc.esp = 0x80000FFC;
+    initial_proc.user_stack_top = 0x80000FFC;
+    initial_proc.kernel_stack = 0;
+    initial_proc.page_dir = 0;
+    initial_proc.next = 0;
+
+    proc_enqueue(&initial_proc);
+    proc_dequeue();
+}
 
 void keyboard_handler() {
     unsigned char scancode = inb(0x60);
@@ -146,6 +161,9 @@ void kernel_main(unsigned int magic, struct multiboot_info* mbd) {
 
     }
     fat16_init();
+    process_init();
+    start_init_proc();
+    print("Initial process started.\n");
 
     print("Interrupts enabled.\n");
     print_colored("\n[CIndy-OS]> ", 0x0B);
