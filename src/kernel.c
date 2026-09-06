@@ -41,7 +41,7 @@ void syscall_handler(struct regs *r) {
     handle_syscall(r);
 }
 static void start_init_proc(void){
-    static struct process initial_proc;
+   /* static struct process initial_proc;
 
     initial_proc.pid = 1;
     initial_proc.state = PROC_NEW;
@@ -53,7 +53,12 @@ static void start_init_proc(void){
     initial_proc.next = 0;
 
     proc_enqueue(&initial_proc);
-    proc_dequeue();
+    struct process *p = proc_dequeue();
+    if (p) {
+        print("Initial process dequeued; jumping to user entry.\n");
+        jump_to_usermode(p->user_stack_top, p->entry);
+    }*/
+    print("Process subsystem ready.\n");
 }
 
 void keyboard_handler() {

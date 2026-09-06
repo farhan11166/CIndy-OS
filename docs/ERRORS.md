@@ -4,16 +4,31 @@ A record of interesting bugs, hangs, and panics encountered during development, 
 
 ## Current debugging focus
 
-At the current stage, the main issue is not a crashy kernel boot path anymore. The critical work is now architectural and focused on correctness, not just basic survival.
+Updated: September 2026.
 
-The current known areas to watch are:
-- syscall return values and validation of user pointers
-- per-process memory ownership
-- file descriptor semantics for `open/read/write/close`
-- scheduler correctness once multiple processes exist
-- ELF runtime assumptions for real compiled user binaries
+The low-level machine bugs are fixed. The current risks are architectural.
 
-The project is in a healthy place for this stage: the low-level machine bugs are mostly fixed, and the remaining work is more about OS design discipline than platform debug pain.
+**Known issues to watch before running multiple processes:**
+
+1. **Stack collision between processes** — `task_create_from_elf` currently maps every
+   process's user stack to the same virtual address `0x80000000`. Two processes running
+   simultaneously will corrupt each other's stack. Fix: use `0x80000000 + pid * 0x1000`
+   as the stack virtual address per process.
+
+2. **ELF segment overlap** — two processes loaded from the same ELF binary share the
+   same virtual pages (e.g. `0x08048000`). Safe for one-at-a-time execution. Will break
+   when running two ELF processes concurrently. Requires per-process page directories
+   (CR3 switch) to fix properly.
+
+3. **SYS_OPEN is still a stub** — it does not fill fd slots. User programs calling
+   `SYS_READ` on a file they "opened" will get `-1` because the fd slot is `FD_TYPE_NONE`.
+
+4. **SYS_READ kernel buffer is stack-allocated at 4096 bytes** — keep all files read
+   via `SYS_READ` under 4096 bytes until a heap-backed read path exists.
+
+5. **kmalloc has no free** — every `task_create_from_elf` call leaks one PCB. Fine for
+   a handful of processes. Will become a problem if processes are created and destroyed
+   frequently.
 
 ---
 

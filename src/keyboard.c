@@ -11,6 +11,7 @@
 #include "../include/fat16.h"  
 #include "../include/paging.h" 
 #include "../include/gdt.h"
+#include "../include/process.h"
 extern volatile unsigned int timer_ticks;
 extern uint32_t saved_kernel_esp;
 
@@ -176,6 +177,7 @@ void execute_command(){
             print("  fat-cat  <file.ext>      (read  FAT16 file)\n");
             print("  fat-write <file.ext> <text>  (write FAT16 file)\n");
             print("  run <file.ext>           (load and execute binary)\n");
+            print("  spawn <file.elf>         (create process and run ELF)\n");
             print("  read-test, write-test    (raw ATA sector test)\n");
 
         }
@@ -374,7 +376,28 @@ void execute_command(){
                 }
                 // tmp_buf is kernel-allocated; no free routine available — leak is acceptable for now in this toy OS
             }
-        }        else{
+        }else if (strcmp(argv[0], "spawn") == 0) {
+              if (argc < 2) {
+                  print("Usage: spawn <file.elf>\n");
+              } else {
+                  uint32_t pid = 0;
+                  int r = task_create_from_elf(argv[1], &pid);
+                  if (r < 0) {
+                      print("spawn: failed to create process\n");
+                  } else {
+                      print("spawn: pid=");
+                      print_int(pid);
+                      print(" created, running...\n");
+                      struct process *p = proc_dequeue();
+                      if (p) {
+                          jump_to_usermode(p->user_stack_top, p->entry);
+                          print("spawn: process exited.\n");
+                      }
+                  }
+              }
+          }
+        
+        else{
             print("Unknown command: ");
             print(argv[0]);
         }

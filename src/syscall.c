@@ -1,6 +1,7 @@
 #include "../include/syscall.h"
 #include "../include/screen.h"
 #include "../include/paging.h"
+#include "../include/process.h"
 
 extern volatile uint32_t syscall_exit_requested;
 volatile uint32_t last_exit_status = 0;
@@ -79,6 +80,14 @@ void handle_syscall(struct regs *r) {
             r->eax = written;
             break;
         }
+        struct process *proc =get_curr_proc();
+        if(proc && fd>=0 && fd<PROC_MAX_FDS){
+            struct fd_entry *fde=&proc->fds[fd];
+            if(fde->type == FD_TYPE_FAT16){
+                r->eax=-1;
+                break;
+            }
+        }
         r->eax = -1;
         break;
     }
@@ -120,6 +129,57 @@ void handle_syscall(struct regs *r) {
             break;
         }
         r->eax = -1;
+        break;
+    }
+
+    case SYS_YIELD: {
+        /* Cooperative yield: save current pushed register frame into the
+         * outgoing process, rotate the ready queue, and modify the saved
+         * interrupt return frame so that iret resumes the newly-selected
+         * process. */
+        struct process *prev = get_curr_proc();
+        /* Pointer arithmetic: `r` points at the pusha frame (edi..eax).
+         * The saved user EIP is located immediately above the pusha frame
+         * on the stack (after 8 32-bit registers). */
+        uint32_t *saved_eip_ptr = ((uint32_t *)r) + 8;
+
+        if (prev) {
+            /* copy general regs and esp */
+            prev->regs = *r;
+            prev->esp = r->esp; /* keep process esp in sync */
+            prev->saved_eip = *saved_eip_ptr;
+            proc_enqueue(prev);
+        }
+
+        struct process *next = proc_dequeue();
+        if (!next) {
+            /* Nothing to run — leave frame as-is; return success */
+            r->eax = 0;
+            break;
+        }
+
+        /* `proc_dequeue` set curr_proc and next->state; restore its saved
+         * registers (if any) into the interrupt return frame so iret will
+         * resume it. If this is the process' first run, use its entry and
+         * esp fields to initialize the frame. */
+        if (next->regs.edi || next->regs.eax || next->regs.ebx || next->regs.ecx
+            || next->regs.edx || next->regs.ebp || next->regs.esi) {
+            /* Has previous regs saved — restore all */
+            *r = next->regs;
+        } else {
+            /* Fresh process: zero general regs, set esp from process. */
+            r->edi = 0; r->esi = 0; r->ebp = 0; /* r->esp set below */
+            r->ebx = 0; r->edx = 0; r->ecx = 0; r->eax = 0;
+            if (next->esp) r->esp = next->esp;
+            else if (next->user_stack_top) r->esp = next->user_stack_top;
+        }
+
+        /* set the return EIP to the saved one (if available) or to entry */
+        if (next->saved_eip) *saved_eip_ptr = next->saved_eip;
+        else *saved_eip_ptr = next->entry;
+
+        /* Indicate success to caller */
+        r->eax = 0;
         break;
     }
 

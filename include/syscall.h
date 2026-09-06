@@ -9,6 +9,7 @@
 #define SYS_OPEN   2
 #define SYS_CLOSE  3
 #define SYS_READ   4
+#define SYS_YIELD  5
 
 #define FD_STDIN  0
 #define FD_STDOUT 1

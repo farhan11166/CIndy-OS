@@ -626,3 +626,59 @@ PMM at runtime.  The fix makes `kmalloc_a` a thin wrapper that also registers wi
 PMM, keeping the kernel's two allocation paths consistent.
 
 See `docs/BUGREPORT_PMM_FRAME_ALIAS.md` for full analysis.
+
+---
+
+## Session — September 6, 2026 — Process Abstraction, Scheduler, FD Table Foundation
+
+**Phase:** User-space runtime hardening
+
+### ✅ What Was Done
+
+**`src/kernel.c` — removed auto-launch on boot**
+- `start_init_proc` previously called `jump_to_usermode(0x80000FFC, 0x40000000)` unconditionally on boot, meaning the shell was never reachable until the user program exited.
+- Replaced with a no-op that prints `"Process subsystem ready."` so the shell prompt appears immediately on boot.
+- User-mode entry is now entirely on-demand via the `run` or `spawn` shell commands.
+
+**`src/process.c` — implemented `task_create_from_elf`**
+- Was a stub returning `-1`.
+- Now reads a named file from FAT16, calls `load_elf_program` to map ELF PT_LOAD segments, allocates and maps a user stack page at `0x80000000`, allocates a PCB via `kmalloc`, zeroes it, fills all fields, and calls `proc_enqueue`.
+- Returns the new pid via an out-pointer.
+
+**`src/keyboard.c` — added `spawn` shell command**
+- `spawn <file.elf>` calls `task_create_from_elf`, dequeues the created process, and runs it via `jump_to_usermode`.
+- When the process calls `SYS_EXIT`, `kernel_return` fires and execution resumes at `"spawn: process exited."` — same return path as `run`.
+- Added `spawn` to the `help` command output.
+
+**`src/scheduler.c` — filled the empty file**
+- Wrote `schedule()`: re-enqueues current process as READY, dequeues next, calls `jump_to_usermode`.
+- Wrote `yield_kernel()`: thin wrapper around `schedule()` for kernel-side yield.
+- Noted that `SYS_YIELD` in `syscall.c` already does the full iret-frame patching for cooperative switching at the interrupt level — `scheduler.c` drives the queue rotation.
+
+**`include/process.h` — added fd table to PCB**
+- Added `PROC_MAX_FDS 8` — max open files per process.
+- Added `fd_type_t` enum: `FD_TYPE_NONE`, `FD_TYPE_STDIO`, `FD_TYPE_FAT16`.
+- Added `struct fd_entry`: `type`, `name8[9]`, `ext3[4]`, `offset`.
+- Added `struct fd_entry fds[PROC_MAX_FDS]` field to `struct process`.
+
+**`src/syscall.c` — SYS_WRITE extended for fd table**
+- After the stdout/stderr fast path, `SYS_WRITE` now looks up the fd in the current process's fd table.
+- FAT16 fd writes return `-1` for now (stub) — the structure is in place for the real implementation.
+
+### 📚 What This Means
+The kernel now has:
+- A working process creation path: `task_create_from_elf` → PCB → queue → `jump_to_usermode`
+- A scheduler that can rotate the process queue
+- An fd table structure baked into every PCB, ready for `SYS_OPEN`/`SYS_READ`/`SYS_CLOSE` to use
+- A shell that does not block on user-mode entry at boot
+
+### Next milestone
+See `docs/PLAN.md` for the ordered step-by-step implementation plan.
+Short version:
+1. Implement `SYS_OPEN` properly — fill fd slots from FAT16 lookup
+2. Implement `SYS_READ` — read from fd slot with offset tracking
+3. Implement `SYS_CLOSE` — clear fd slots
+4. Pre-fill stdio fds (0/1/2) in `task_create_from_elf`
+5. Write a two-task yield test to validate cooperative scheduling
+6. Change `isr32` to pass its register frame — groundwork for timer preemption
+

@@ -1,13 +1,18 @@
 #include "../include/timer.h"
 #include "../include/ports.h"
 #include "../include/screen.h"
+#include "../include/types.h"
 
 volatile unsigned int timer_ticks=0;
+extern volatile uint32_t yield_flag;
 
 void timer_handler(){
     timer_ticks++;
 
     outb(0x20,0x20);
+    if(yield_flag){
+        yield_flag=0;
+    }
 
 }
 void init_timer(unsigned int freq){
