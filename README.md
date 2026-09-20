@@ -1,198 +1,188 @@
 # 🖥️ CIndy-OS
 
-A bare-metal x86 hobby operating system built from scratch in NASM and C. The project is intentionally small, explicit, and educational: each subsystem is implemented by hand so the kernel can be understood step by step.
+CIndy-OS is a small 32-bit x86 hobby operating system built from scratch with NASM and freestanding C. It is intentionally explicit and educational: the boot path, interrupt handling, memory management, paging, filesystems, user-mode execution, system calls, and early process support are implemented by hand.
+
+> **Status:** early kernel / learning OS. The current tree boots with GRUB, provides an interactive shell, accesses a FAT16 disk and initrd, loads flat binaries and simple ELF executables, enters ring 3, and contains the first pieces of a cooperative process model.
 
 ---
 
-## What is working right now
+## Current capabilities
 
-CIndy-OS now has a stable protected-mode kernel with a working ring-3 transition path, a usable minimal syscall ABI, and a primitive ELF loader. The design is still intentionally simple, but it is already enough to load a user program, switch into ring 3, make syscalls, and return cleanly to the kernel.
+### Boot and kernel initialization
 
-Current capabilities:
+- GRUB Multiboot boot path for a 32-bit kernel ISO.
+- Protected-mode startup with a GDT, TSS, and kernel stack.
+- VGA text-mode output with cursor control, colored output, scrolling, and serial initialization.
+- QEMU run targets for normal, curses, and debug-console operation.
 
-1. **Boot and protected mode**
-   - GRUB boots the kernel from ISO
-   - GDT and TSS are initialized and ring transitions are supported
-   - kernel enters protected mode and sets up a stable stack
+### Interrupts and hardware
 
-2. **Interrupts and exceptions**
-   - IDT is configured
-   - PIC is remapped
-   - IRQ0 and IRQ1 are handled
-   - CPU exceptions are caught without silently crashing
+- IDT setup with CPU exception handlers.
+- PIC remapping.
+- IRQ0 timer support through the PIT.
+- IRQ1 PS/2 keyboard support.
+- `int 0x80` syscall entry from user mode.
+- Basic keyboard-controller reboot support.
 
-3. **Kernel shell**
-   - command parser with `argc/argv`
-   - built-in shell commands such as `help`, `about`, `version`, `echo`, `ls`, `cat`, `meminfo`, `timer`, `uptime`, `run`, etc.
+### Interactive kernel shell
 
-4. **Memory and paging**
-   - PMM tracks physical frames via bitmap allocation
-   - paging is enabled with an identity map for the lower memory region
-   - page validation checks for user pages before allowing user-space access
+The shell supports simple whitespace-separated `argc`/`argv` parsing and currently includes:
 
-5. **Filesystem support**
-   - initrd/USTAR support for basic file listing and reading
-   - FAT16 disk access for file loading and writing
+- `help`, `clear`, `echo`
+- `about`, `version`, `whoami`, `pwd`
+- `timer`, `uptime`, `meminfo`
+- `ls`, `cat` for the initrd filesystem
+- `fat-ls`, `fat-cat`, `fat-write` for the FAT16 disk
+- `read-test`, `write-test` for raw ATA sector testing
+- `run <file>` to load a flat binary or ELF image
+- `spawn <file.elf>` to create and start an ELF-backed process
+- `reboot`
 
-6. **User-mode execution**
-   - kernel can load a program into a mapped virtual region and jump to ring 3
-   - a user program can execute in ring 3 and return to the kernel via a syscall exit path
+### Memory management and paging
 
-7. **Minimal syscall ABI**
-   - `SYS_EXIT`
-   - `SYS_WRITE`
-   - `SYS_READ`
-   - `SYS_OPEN`
-   - `SYS_CLOSE`
-   - current implementation is intentionally small and safe for the learning project stage
+- Kernel heap allocation through `kmalloc_a`.
+- Physical memory manager using a bitmap of page frames.
+- Multiboot memory-map based memory initialization.
+- Paging enabled with identity-mapped physical memory sized from detected RAM, with a fallback mapping when detection is unavailable.
+- Dynamic page mapping through `map_page` and page-table lookup through `get_pte`.
+- User-region and user-pointer validation for syscall memory access.
+- User mappings currently use a shared page directory and are not isolated per process.
 
-8. **ELF loading**
-   - the `run` command detects ELF headers and loads PT_LOAD segments
-   - this is a minimal loader, not a full ELF runtime or relocator yet
+### Storage and filesystems
+
+- ATA PIO sector reads and writes.
+- A generated 20 MiB FAT16 disk image.
+- FAT16 root-directory listing, file reads, and file creation/writes using 8.3 filenames.
+- USTAR/tar-style initrd support for listing and reading files.
+- The build copies the generated initrd into the bootable ISO and test programs into the FAT16 disk image.
+
+### User-mode execution
+
+- Ring-3 entry and return helpers using the GDT/TSS setup.
+- Flat binaries can be loaded at `0x40000000`.
+- Simple 32-bit `ET_EXEC` ELF files are recognized and their `PT_LOAD` segments are mapped at their requested virtual addresses.
+- A user stack is allocated and mapped at `0x80000000`.
+- `SYS_EXIT` returns control to the kernel-side launch path.
+- The repository includes `user/YOOO.asm` as a flat-binary syscall test and `user/hello_elf.asm` as a minimal ELF example.
+
+### Process foundation
+
+The repository now contains an initial process subsystem:
+
+- Process states: `NEW`, `READY`, `RUNNING`, `BLOCKED`, and `EXITED`.
+- PID allocation and a FIFO ready queue.
+- Process lookup by PID and current-process tracking.
+- `spawn <file.elf>` creates a process structure, loads an ELF image, allocates a user stack, and queues it.
+- `SYS_YIELD` rotates the ready queue and saves/restores the basic register frame.
+
+This is process and scheduling groundwork rather than complete multitasking: context switching, address-space isolation, and lifecycle cleanup are still incomplete.
+
+---
+
+## System-call ABI
+
+System calls are entered through `int 0x80` with the following register convention:
+
+- `eax` — syscall number
+- `ebx` — first argument
+- `ecx` — second argument
+- `edx` — third argument
+
+Defined calls:
+
+| Number | Name | Current behavior |
+|---:|---|---|
+| `0` | `SYS_EXIT` | Records the exit status and requests return from the user program. |
+| `1` | `SYS_WRITE` | Writes to stdout/stderr; other file descriptors are not fully implemented. |
+| `2` | `SYS_OPEN` | Minimal placeholder behavior; only limited paths are accepted. |
+| `3` | `SYS_CLOSE` | Accepts the standard descriptors; other descriptors are not complete. |
+| `4` | `SYS_READ` | stdin currently returns zero; general file reads are not implemented. |
+| `5` | `SYS_YIELD` | Performs an early cooperative ready-queue rotation when a process is active. |
+
+Standard descriptors are `0` for stdin, `1` for stdout, and `2` for stderr. User pointers are validated against mapped, user-accessible pages before copying data, except for the temporary kernel-mode test fallback used by early execution paths.
 
 ---
 
 ## Project structure
 
-```
+```text
 CIndy-OS/
 ├── src/
-│   ├── boot.asm              # entry point, multiboot header, early GDT setup
-│   ├── kernel.c              # main kernel logic, process of init and shell
-│   ├── screen.c              # VGA text output, cursor, scrolling
-│   ├── ports.c               # inb/outb wrappers
-│   ├── idt.c                 # IDT setup
+│   ├── boot.asm              # Multiboot entry and early startup
+│   ├── kernel.c              # Kernel initialization and interrupt registration
+│   ├── screen.c              # VGA text output and serial helpers
+│   ├── ports.c               # x86 I/O port wrappers
+│   ├── idt.c                 # IDT construction
 │   ├── idt_load.asm          # lidt helper
-│   ├── isr.asm               # ISR/IRQ stubs, syscall entry logic
-│   ├── interrupts.asm        # enable_interrupts()
+│   ├── isr.asm               # exception, IRQ, and syscall stubs
+│   ├── interrupts.asm        # interrupt enable helper
 │   ├── pic.c                 # PIC remapping
-│   ├── timer.c               # PIT / timer tick logic
-│   ├── keyboard.c            # PS/2 keyboard, shell, run command, primitive ELF loader
-│   ├── memory.c              # kmalloc + PMM
-│   ├── paging.c              # page tables, user validation, map_page
-│   ├── fs.c                  # initrd / tar-like fs access
-│   ├── fat16.c               # FAT16 driver
-│   ├── string.c              # basic string functions
+│   ├── timer.c               # PIT timer support
+│   ├── keyboard.c            # PS/2 keyboard, shell, binary and ELF loading
+│   ├── memory.c              # Kernel allocator and physical memory manager
+│   ├── paging.c              # Page directories, mapping, and validation
+│   ├── fs.c                  # Initrd/USTAR filesystem
 │   ├── ata.c                 # ATA PIO disk access
-│   ├── gdt.c                 # GDT/TSS setup
-│   ├── syscall.c             # minimal syscall implementation
-│   └── usermode.asm          # ring-3 entry/exit helpers
-├── include/
-│   ├── types.h
-│   ├── screen.h
-│   ├── ports.h
-│   ├── idt.h
-│   ├── interrupts.h
-│   ├── pic.h
-│   ├── timer.h
-│   ├── keyboard.h
-│   ├── memory.h
-│   ├── paging.h
-│   ├── fs.h
-│   ├── fat16.h
-│   ├── string.h
-│   ├── ata.h
-│   ├── multiboot.h
-│   ├── regs.h                # register frame definition for syscall handling
-│   └── syscall.h             # syscall numbers + prototypes
+│   ├── fat16.c               # FAT16 driver
+│   ├── gdt.c                 # GDT and TSS setup
+│   ├── syscall.c             # Syscall dispatch and user copies
+│   ├── process.c             # Early process and ready-queue support
+│   ├── string.c              # Freestanding string/memory helpers
+│   ├── gdt_flush.asm         # GDT reload helper
+│   └── usermode.asm          # Ring-3 entry/return helpers
+├── include/                  # Kernel headers and ABI definitions
 ├── user/
-│   ├── YOOO.asm              # simple user-mode test using SYS_WRITE + SYS_EXIT
-│   └── hello_elf.asm        # minimal ELF example
-├── iso/
-│   └── boot/
-│       ├── kernel.bin        # generated kernel image
-│       ├── initrd.tar        # generated initrd
-│       └── grub/
-│           └── grub.cfg      # boot config
-├── fs/
-│   └── files for initrd
-├── disk.img                  # FAT16 virtual disk
-├── linker.ld                 # kernel linker script
-├── Makefile                  # build + run targets
-├── recap.md                  # project recap / high-level workflow map
-├── docs/
-│   ├── LEARNING.md
-│   ├── INTERNALS.md
-│   ├── DEVLOG.md
-│   └── ERRORS.md
-├── README.md                 # this file
-├── CIndy-os.iso              # generated bootable ISO
-└── initrd.tar                # generated archive for boot
+│   ├── YOOO.asm              # Flat user-mode syscall test
+│   └── hello_elf.asm         # Minimal 32-bit ELF test program
+├── fs/                       # Files packaged into the initrd
+├── iso/boot/grub/grub.cfg    # GRUB configuration
+├── linker.ld                 # Kernel linker script
+├── Makefile                  # Build, image, ISO, and QEMU targets
+├── disk.img                  # Generated FAT16 disk image
+├── recap.md                  # Project workflow recap
+├── docs/                     # Learning notes, internals, devlog, and errors
+└── README.md
 ```
+
+Generated artifacts such as `kernel.bin`, `CIndy-os.iso`, `initrd.tar`, and the FAT16 image are produced or refreshed by the build process and may be present in the working tree.
 
 ---
 
-## The actual system design in one flow
+## Runtime flow
 
 ### Boot flow
 
-```
-BIOS/UEFI -> GRUB -> kernel.bin -> boot.asm -> kernel_main()
+```text
+GRUB -> kernel.bin -> boot.asm -> kernel_main()
 ```
 
-Kernel startup does:
-- set up GDT
-- set up IDT
-- remap PIC
-- initialize timer and keyboard
-- parse memory map
-- initialize PMM
-- enable paging
-- mount/initrd and FAT16
-- start shell loop
+Kernel startup initializes the serial console, screen, GDT/TSS, IDT, PIC, timer, paging, physical memory manager, initrd, FAT16 driver, and process subsystem before entering the keyboard-driven shell.
 
-### User-mode flow
+### Program flow
 
-```
+```text
 run <file>
-  -> read file from FAT16
-  -> detect flat binary or ELF
-  -> allocate user page(s)
-  -> map them in virtual memory
-  -> set up a user stack
-  -> jump_to_usermode(user_stack, entry)
-  -> user code executes in ring 3
-  -> int 0x80 triggers syscall
-  -> kernel handles it
-  -> SYS_EXIT restores kernel stack and returns to host C code
+  -> read a file from FAT16
+  -> detect a flat binary or ELF image
+  -> allocate physical memory and map user pages
+  -> allocate/map a user stack
+  -> enter ring 3
+  -> user code invokes int 0x80
+  -> syscall handler validates arguments and dispatches the call
+  -> SYS_EXIT returns to the kernel launcher
 ```
 
-This is the core learning path of the project: boot -> kernel -> memory -> paging -> user mode -> syscall -> back to kernel.
+### Process flow
 
----
-
-## Minimal syscall model
-
-The current syscall layer is deliberately simple and intentionally small:
-
-- `eax` = syscall number
-- `ebx` = arg1
-- `ecx` = arg2
-- `edx` = arg3
-
-Supported minimal calls:
-- `SYS_EXIT` (0)
-- `SYS_WRITE` (1)
-- `SYS_READ` (4)
-- `SYS_OPEN` (2)
-- `SYS_CLOSE` (3)
-
-This is enough to support a basic user program that prints text and exits cleanly.
-
----
-
-## Important limitations
-
-This project is not yet a full OS in the modern sense. It is still a learning OS. Important current limits:
-
-- no full scheduler yet
-- no per-process page directory switching
-- no true process descriptor table
-- no full user-space memory isolation beyond basic validation
-- `SYS_READ` and `SYS_OPEN` are still minimal stubs
-- ELF loading is minimal and does not yet do relocation-heavy advanced ELF handling
-
-This is okay and expected for the current phase.
+```text
+spawn <file.elf>
+  -> read and validate an ELF image
+  -> map its PT_LOAD segments
+  -> allocate a user stack
+  -> create a process structure and PID
+  -> enqueue it as READY
+  -> dequeue and enter its user entry point
+```
 
 ---
 
@@ -200,9 +190,13 @@ This is okay and expected for the current phase.
 
 ### Prerequisites
 
+On Debian/Ubuntu-like systems:
+
 ```bash
 sudo apt-get install -y nasm gcc grub-pc-bin grub-common xorriso mtools qemu-system-x86
 ```
+
+A working 32-bit freestanding toolchain is required because the kernel is compiled with `gcc -m32` and linked as `elf_i386`.
 
 ### Build
 
@@ -210,15 +204,17 @@ sudo apt-get install -y nasm gcc grub-pc-bin grub-common xorriso mtools qemu-sys
 make
 ```
 
-Build steps:
-1. assemble assembly sources
-2. compile C sources with 32-bit freestanding flags
-3. link kernel.bin
-4. build test user programs
-5. place them into disk.img
-6. build ISO for booting
+The Makefile:
 
-### Run
+1. assembles the boot, interrupt, GDT, and user-mode assembly;
+2. compiles the freestanding C kernel sources;
+3. links `kernel.bin`;
+4. builds the flat-binary and ELF user tests;
+5. creates a 20 MiB FAT16 `disk.img` and copies the user images into it;
+6. packages `fs/` as `initrd.tar`; and
+7. creates `CIndy-os.iso` with `grub-mkrescue`.
+
+### Run in QEMU
 
 ```bash
 make run
@@ -226,28 +222,53 @@ make run-curses
 make run-debug
 ```
 
+`make run-debug` hides the graphical display and sends the QEMU debug console to standard output.
+
+### Clean generated output
+
+```bash
+make clean
+```
+
+---
+
+## Known limitations
+
+CIndy-OS is not yet a general-purpose operating system. Current limitations include:
+
+- one shared page directory; no per-process address spaces or CR3 switching;
+- no complete scheduler or timer-driven preemptive multitasking;
+- cooperative yield support is present but still an early context-switching prototype;
+- process kernel stacks, cleanup, termination, and complete saved CPU state are unfinished;
+- file descriptors are only partially modeled and filesystem-backed syscall I/O is incomplete;
+- `SYS_READ` is not connected to a keyboard input buffer;
+- `SYS_OPEN` and `SYS_CLOSE` have placeholder semantics;
+- ELF loading supports a small 32-bit `ET_EXEC` subset and does not provide relocations, dynamic linking, or full permission handling;
+- user memory isolation is limited by the shared identity-mapped address space;
+- the kernel allocator has no general free path, so some temporary load buffers are leaked;
+- hardware support is intentionally limited to the devices needed by the current learning path.
+
+These constraints are deliberate milestones for an educational kernel, not claims of production readiness.
+
 ---
 
 ## Roadmap
 
-### Completed
-- [x] GDT + protected mode
-- [x] TSS and ring-3 transition fix
-- [x] IDT and hardware interrupt setup
-- [x] keyboard + shell
-- [x] PMM and paging
-- [x] initrd / FAT16 support
-- [x] user-mode execution
-- [x] minimal syscall layer
-- [x] minimal ELF loader
-
-### Next real milestones
-- [ ] per-process page directory model
-- [ ] real process structs / task state
-- [ ] cooperative scheduler
-- [ ] proper file descriptor table
-- [ ] richer syscall semantics and return values
-- [ ] preemptive multitasking
+- [x] GRUB boot and protected mode
+- [x] GDT, TSS, IDT, PIC, timer, and keyboard interrupt setup
+- [x] Kernel shell and basic diagnostics
+- [x] Physical memory manager and paging
+- [x] Initrd/USTAR and FAT16 read/write support
+- [x] Flat-binary and minimal ELF loading
+- [x] Ring-3 transition and basic syscall entry
+- [x] Initial process structures, PID allocation, ready queue, and cooperative yield prototype
+- [ ] Per-process page directories and address-space isolation
+- [ ] Complete process context switching and kernel stacks
+- [ ] Timer-driven preemptive scheduler
+- [ ] Process exit/reaping and resource cleanup
+- [ ] Proper file-descriptor table and filesystem-backed syscalls
+- [ ] Keyboard input buffering for `SYS_READ`
+- [ ] More complete ELF validation, permissions, and relocation support
 
 ---
 
