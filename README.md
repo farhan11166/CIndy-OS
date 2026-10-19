@@ -8,7 +8,7 @@ CIndy-OS is a small 32-bit x86 hobby operating system built from scratch with NA
 
 ## 🎬 Demo
 
-<video src="https://github.com/user-attachments/assets/7987eb70-72b1-414e-a3f8-eede478fc095" controls width="100%"></video>
+https://github.com/user-attachments/assets/7987eb70-72b1-414e-a3f8-eede478fc095
 
 > Boot → kernel shell → FAT16 disk access → user-mode flat binary (`run YOOO.BIN`) → ring-3 syscall → ELF process spawn.
 
