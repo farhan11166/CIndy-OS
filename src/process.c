@@ -4,6 +4,8 @@
 #include "../include/paging.h"
 #include "../include/fs.h"
 #include "../include/string.h"
+#include "../include/fat16.h"
+#include "../include/keyboard.h"
 #define NULL 0
 static struct process *curr_proc = NULL;
 static struct process *ready_head = NULL;

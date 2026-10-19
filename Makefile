@@ -26,11 +26,12 @@ all: $(DISK_IMG) user/YOOO.bin user/hello_elf.elf
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/gdt.c -o gdt.o
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/syscall.c -o syscall.o
 	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/process.c -o process.o
+	gcc -m32 -ffreestanding -fno-pic -fno-stack-protector -c src/scheduler.c -o scheduler.o
 
 	ld -m elf_i386 -T linker.ld -o kernel.bin \
     boot.o kernel.o screen.o ports.o idt.o pic.o isr.o idt_load.o interrupts.o \
     keyboard.o timer.o string.o memory.o fs.o ata.o fat16.o paging.o gdt.o \
-    syscall.o process.o gdt_flush.o usermode.o
+    syscall.o process.o scheduler.o gdt_flush.o usermode.o
 
 	cp kernel.bin iso/boot/kernel.bin
 	cd fs && tar -cvf ../initrd.tar *

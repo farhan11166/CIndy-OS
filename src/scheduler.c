@@ -2,6 +2,9 @@
 #include "../include/syscall.h"
 #include "../include/screen.h"
 #include "../include/process.h"
+#include "../include/types.h"
+
+volatile uint32_t yield_flag = 0;
 
 
 void schedule(void){
